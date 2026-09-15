@@ -2,41 +2,33 @@
 
 PESU-MAX is a tool that makes the best use of pesuacademy. 
 
-## DEMO VIDEO
-https://github.com/user-attachments/assets/f326dab6-3d37-4be4-a399-8b66b4d2739f
-
-
-## NOTE
-
-*The bug for some slides/notes being skipped is fixed, please take the latest pull*
-
-Login and load the package for faster auth.
-
-Not an official package from PES University, made for only downloading resources quickly from PESU Academy.
-
-All users data is stored locally in browser. NO proxy servers or External DB connected.
-
 ## Installation
+
+### Chrome Web Store
+
+[Install PESU-MAX from the Chrome Web Store](https://chromewebstore.google.com/detail/pesu-max/cmdaofpmedkoahlmcihcdaehgenfdnen)
+
+### Local Installation
 
 ```bash
 git clone https://github.com/ndigvijay/PESU-MAX.git
-```
-
-```bash
 cd PESU-MAX/
-```
-
-```bash
 npm i
 ```
 
-## Building the Extension
+### Building the Extension
 
 ```bash
 npm run build
 ```
 
 Use the `dist/` folder to load the extension.
+
+## NOTE
+
+Not an official package from PES University, made for only downloading resources quickly from PESU Academy.
+
+All users data is stored locally in browser. NO proxy servers or External DB connected.
 
 ## FEATURES
 - course content downloader *(across semesters,courses and units)*
@@ -69,7 +61,6 @@ Use the `dist/` folder to load the extension.
 |:----:|:-------:|
 | ![Faculty Menu](Images/faculty-menu.png) | ![Faculty Profile](Images/faculty-profile.png) |
 
-### PYQs
-| PYQ Downloader |
-|:--------------:|
-| ![PYQs](Images/PYQs.png) |
+## DEMO VIDEO
+
+https://github.com/user-attachments/assets/f326dab6-3d37-4be4-a399-8b66b4d2739f
