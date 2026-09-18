@@ -42,6 +42,7 @@ All users data is stored locally in browser. NO proxy servers or External DB con
 - CGPA calculator
 - Faculty Information
 - Previous Year Question Papers (PYQs)
+- Re-order the PESU Academy side menu by drag and drop, Home stays first
 
 ## Screenshots
 
