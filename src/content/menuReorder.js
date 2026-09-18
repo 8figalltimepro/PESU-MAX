@@ -4,23 +4,30 @@ import theme from "../../frontend/Themes/theme.jsx";
 const STORAGE_KEY = "sideMenuOrder";
 const LOG_PREFIX = "PESU-MAX:";
 const MENU_LIST_ID = "studentProfilePESUHomeMenu";
-const MENU_ITEM_SELECTOR = `#${MENU_LIST_ID} > li[id^="menuTab_"]`;
 const HOME_URL_MARKER = "/Home/";
 const STYLE_ID = "pesu-max-menu-reorder-style";
-const DRAGGING = "pesu-max-menu-dragging";
-const DROP_ABOVE = "pesu-max-menu-drop-above";
-const DROP_BELOW = "pesu-max-menu-drop-below";
+const BAR_ID = "pesu-max-menu-edit-bar";
+const CLASS = "pesu-max-menu";
+const EDITING = `${CLASS}-editing`;
+const HOME_LOCKED = `${CLASS}-home-locked`;
+const DRAGGING = `${CLASS}-dragging`;
+const DROP_ABOVE = `${CLASS}-drop-above`;
+const DROP_BELOW = `${CLASS}-drop-below`;
 
 let savedOrder = [];
+let naturalOrder = [];
+let editing = false;
 const wiredLists = new WeakSet();
 
 const menuItems = (list) =>
   [...list.children].filter((el) => el.tagName === "LI" && el.id.startsWith("menuTab_"));
 
+const menuList = () => document.getElementById(MENU_LIST_ID);
+
 // Home stays pinned first, so it is never draggable nor droppable-on-top-of.
 const isHome = (item) => !!item && (item.getAttribute("data-url") || "").includes(HOME_URL_MARKER);
 
-// savedOrder first, then anything the user has not touched in the order the page rendered it
+// saved order first, then anything the user has not touched in the order the page rendered it
 function computeOrder(itemIds, order, homeId) {
   const present = new Set(itemIds);
   const wanted = [];
@@ -53,11 +60,21 @@ function applyOrder(list) {
   wanted.forEach((id) => list.appendChild(byId.get(id)));
 }
 
+function reorderDom(list, ids) {
+  const byId = new Map(menuItems(list).map((item) => [item.id, item]));
+  ids.forEach((id) => {
+    if (byId.has(id)) list.appendChild(byId.get(id));
+  });
+}
+
 function makeDraggable(list) {
   menuItems(list).forEach((item) => {
-    item.draggable = !isHome(item);
+    const home = isHome(item);
+    item.draggable = editing && !home;
+    item.classList.toggle(HOME_LOCKED, editing && home);
     const link = item.querySelector("a");
-    if (link) link.draggable = false; // otherwise the browser starts a native link drag
+    // otherwise the browser starts a native link drag instead of ours
+    if (link) link.draggable = false;
   });
 }
 
@@ -80,12 +97,72 @@ function injectStyle() {
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = `
-    ${MENU_ITEM_SELECTOR} { cursor: grab; }
-    ${MENU_ITEM_SELECTOR}.${DRAGGING} { cursor: grabbing; opacity: 0.5; }
-    ${MENU_ITEM_SELECTOR}.${DROP_ABOVE} { box-shadow: inset 0 3px 0 0 ${theme.colors.secondary}; }
-    ${MENU_ITEM_SELECTOR}.${DROP_BELOW} { box-shadow: inset 0 -3px 0 0 ${theme.colors.secondary}; }
+    #${MENU_LIST_ID}.${EDITING} {
+      outline: 2px dashed ${theme.colors.primary};
+      outline-offset: -2px;
+      border-radius: 8px;
+    }
+    #${MENU_LIST_ID}.${EDITING} > li[id^="menuTab_"] { cursor: grab; }
+    #${MENU_LIST_ID} > li.${HOME_LOCKED} { cursor: not-allowed; opacity: 0.65; }
+    #${MENU_LIST_ID} > li.${DRAGGING} { cursor: grabbing; opacity: 0.5; }
+    #${MENU_LIST_ID} > li.${DROP_ABOVE} { box-shadow: inset 0 3px 0 0 ${theme.colors.secondary}; }
+    #${MENU_LIST_ID} > li.${DROP_BELOW} { box-shadow: inset 0 -3px 0 0 ${theme.colors.secondary}; }
+    #${BAR_ID} {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 520px;
+      padding: 12px 14px;
+      box-sizing: border-box;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #${BAR_ID} .${CLASS}-text { display: flex; flex-direction: column; gap: 2px; }
+    #${BAR_ID} .${CLASS}-title { font-size: 14px; font-weight: 700; color: ${theme.colors.secondary}; }
+    #${BAR_ID} .${CLASS}-hint { font-size: 12px; color: #666666; }
+    #${BAR_ID} button {
+      flex: 0 0 auto;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1.5px solid ${theme.colors.secondary};
+      background: #ffffff;
+      color: ${theme.colors.secondary};
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #${BAR_ID} button.${CLASS}-lock {
+      border-color: ${theme.colors.primary};
+      background: ${theme.colors.primary};
+      color: #ffffff;
+    }
+    #${BAR_ID} button.${CLASS}-lock:hover { background: ${theme.colors.primaryHover}; }
+    #${BAR_ID} button.${CLASS}-reset:hover { background: ${theme.colors.secondaryLight}; }
   `;
   document.head.appendChild(style);
+}
+
+function buildEditBar() {
+  if (document.getElementById(BAR_ID)) return;
+  const bar = document.createElement("div");
+  bar.id = BAR_ID;
+  bar.innerHTML = `
+    <span class="${CLASS}-text">
+      <span class="${CLASS}-title">Re-order side menu</span>
+      <span class="${CLASS}-hint">Drag a section into place, then lock the order in. Home stays first.</span>
+    </span>
+    <button type="button" class="${CLASS}-reset">Reset</button>
+    <button type="button" class="${CLASS}-lock">&#10003;&nbsp; Lock order</button>
+  `;
+  bar.querySelector(`.${CLASS}-reset`).addEventListener("click", resetMenuOrder);
+  bar.querySelector(`.${CLASS}-lock`).addEventListener("click", lockMenuOrder);
+  document.body.appendChild(bar);
 }
 
 function enableReordering(list) {
@@ -104,7 +181,7 @@ function enableReordering(list) {
 
   list.addEventListener("dragstart", (event) => {
     const item = targetItem(event);
-    if (!item || isHome(item)) return event.preventDefault();
+    if (!editing || !item || isHome(item)) return event.preventDefault();
     dragged = item;
     item.classList.add(DRAGGING);
     event.dataTransfer.effectAllowed = "move";
@@ -127,36 +204,86 @@ function enableReordering(list) {
     event.preventDefault();
     if (isHome(item) || !item.classList.contains(DROP_ABOVE)) item.after(dragged);
     else item.before(dragged);
-    // the move above is a DOM mutation: sync() runs on the next mutation batch and
-    // would put the pre-drag order back unless it is told what we just did
-    rememberOrder(list);
+    clearMarks();
   });
 
-  // dragend always fires, whether the item was dropped or the drag was cancelled,
-  // so the DOM is the single source of truth for what gets persisted.
   list.addEventListener("dragend", () => {
     if (!dragged) return;
     dragged.classList.remove(DRAGGING);
     dragged = null;
     clearMarks();
-    rememberOrder(list);
-    persist(savedOrder);
   });
 }
 
 function sync() {
-  const list = document.getElementById(MENU_LIST_ID);
+  const list = menuList();
   if (!list) return;
-  applyOrder(list);
+
+  if (!wiredLists.has(list)) {
+    wiredLists.add(list);
+    // the site renders the menu in its own order, capture it before touching anything
+    naturalOrder = menuItems(list).map((item) => item.id);
+    injectStyle();
+    enableReordering(list);
+  }
+
+  if (editing) {
+    list.classList.add(EDITING);
+    buildEditBar();
+  }
+
   makeDraggable(list);
-  if (wiredLists.has(list)) return;
-  wiredLists.add(list);
-  injectStyle();
-  enableReordering(list);
+  // while editing the screen is the source of truth; the saved order is only applied after locking
+  if (!editing) applyOrder(list);
+}
+
+export function canEditMenu() {
+  const list = menuList();
+  return !!list && menuItems(list).length > 0;
+}
+
+export function isMenuEditActive() {
+  return editing;
+}
+
+export function startMenuEdit() {
+  const list = menuList();
+  if (!list || !menuItems(list).length) return false;
+  editing = true;
+  list.classList.add(EDITING);
+  buildEditBar();
+  sync();
+  console.log(`${LOG_PREFIX} menu edit mode started`);
+  return true;
+}
+
+function exitMenuEdit() {
+  editing = false;
+  const bar = document.getElementById(BAR_ID);
+  if (bar) bar.remove();
+  const list = menuList();
+  if (list) list.classList.remove(EDITING);
+  sync();
+}
+
+export function resetMenuOrder() {
+  const list = menuList();
+  if (!list) return;
+  reorderDom(list, naturalOrder);
+}
+
+export function lockMenuOrder() {
+  const list = menuList();
+  if (list) {
+    rememberOrder(list);
+    persist(savedOrder);
+  }
+  exitMenuEdit();
+  console.log(`${LOG_PREFIX} menu order locked`);
 }
 
 export function initMenuReorder() {
-  const list = document.getElementById(MENU_LIST_ID);
+  const list = menuList();
   // the page renders the menu in its natural order, so it is hidden for the
   // split second it takes to read the saved order back out of storage
   const reveal = () => {
@@ -174,7 +301,7 @@ export function initMenuReorder() {
     subtree: true,
   });
 
-  // drag handles go up first: an extension reloaded while this page stayed open
+  // the picker goes up first: an extension reloaded while this page stayed open
   // leaves this script orphaned, and chrome.storage answers nothing at all then
   sync();
   load(STORAGE_KEY)
