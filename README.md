@@ -8,6 +8,10 @@ PESU-MAX is a tool that makes the best use of pesuacademy.
 
 [Install PESU-MAX from the Chrome Web Store](https://chromewebstore.google.com/detail/pesu-max/cmdaofpmedkoahlmcihcdaehgenfdnen)
 
+### Firefox Extension
+
+[Install PESU-MAX for Firefox](https://github.com/ndigvijay/PESU-MAX)
+
 ### Local Installation
 
 ```bash
