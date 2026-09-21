@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   Alert,
   Box,
@@ -10,6 +10,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Snackbar,
   TextField,
   Typography
 } from "@mui/material";
@@ -31,10 +32,10 @@ import {
   setCourseSearch,
   setCurrentStep,
   setSearchQuery,
+  showPyqPage,
   setSelectedCourse,
   setSelectedYear,
   setSelectedSemester,
-  setSemesterFilter,
   togglePyqSelection
 } from "../redux/pyqSlice.js";
 import theme from "../Themes/theme.jsx";
@@ -62,27 +63,40 @@ const blueAlertSx = {
   }
 };
 
+const paginationButtonSx = {
+  textTransform: "none",
+  backgroundColor: theme.colors.secondary,
+  color: "#fff",
+  "&:hover": {
+    backgroundColor: theme.colors.secondaryHover
+  },
+  "&.Mui-disabled": {
+    backgroundColor: theme.colors.secondaryLight,
+    color: "rgba(35, 58, 118, 0.55)"
+  }
+};
+
 const loadingText = "fetching resources from library";
 const DEFAULT_PYQ_YEAR = String(new Date().getFullYear());
 const PYQ_YEAR_OPTIONS = Array.from({ length: 5 }, (_, index) => String(new Date().getFullYear() - index));
 
 const PYQ = () => {
   const dispatch = useDispatch();
-  const scrollContainerRef = useRef(null);
-  const loadMoreSentinelRef = useRef(null);
   const {
     semesters,
     courses,
     currentStep,
-    semesterFilter,
     selectedSemester,
     selectedCourse,
     selectedPyqs,
     courseSearch,
     searchQuery,
     searchResults,
+    currentPage,
+    pagesByNumber,
     totalResults,
     lastQuery,
+    lastSearchYear,
     selectedYear,
     hasMore,
     nextPageCursor,
@@ -92,6 +106,7 @@ const PYQ = () => {
     searchError,
     loadingMore,
     loadMoreError,
+    pageNotice,
     downloadingItemId,
     bulkDownloading,
     downloadSuccessItemId,
@@ -103,56 +118,6 @@ const PYQ = () => {
   useEffect(() => {
     dispatch(loadPyqCatalog());
   }, [dispatch]);
-
-  useEffect(() => {
-    const scrollContainer = scrollContainerRef.current;
-    const sentinel = loadMoreSentinelRef.current;
-
-    if (
-      !scrollContainer
-      || !sentinel
-      || currentStep !== "results"
-      || !hasMore
-      || !nextPageCursor
-      || searchLoading
-      || bulkDownloading
-      || loadingMore
-    ) {
-      return undefined;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          dispatch(loadMorePyqs());
-        }
-      },
-      {
-        root: scrollContainer,
-        rootMargin: "160px 0px"
-      }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [
-    bulkDownloading,
-    currentStep,
-    dispatch,
-    hasMore,
-    loadingMore,
-    nextPageCursor,
-    searchLoading,
-    searchResults.length
-  ]);
-
-  const filteredSemesters = useMemo(() => {
-    if (semesterFilter === "all") {
-      return semesters;
-    }
-
-    return semesters.filter((semester) => semester.value === semesterFilter);
-  }, [semesters, semesterFilter]);
 
   const semesterCourses = useMemo(() => {
     if (!selectedSemester) {
@@ -175,9 +140,21 @@ const PYQ = () => {
     );
   }, [courses, selectedSemester, courseSearch]);
 
+  const loadedResults = useMemo(
+    () => Object.values(pagesByNumber).flatMap((page) => page.results || []),
+    [pagesByNumber]
+  );
+
+  const hasPendingSearch = Boolean(
+    lastQuery
+    && searchQuery.trim()
+    && (searchQuery.trim() !== lastQuery || selectedYear !== lastSearchYear)
+    && !searchLoading
+  );
+
   const selectableResults = useMemo(
-    () => searchResults.filter((item) => item.downloadPath),
-    [searchResults]
+    () => loadedResults.filter((item) => item.downloadPath),
+    [loadedResults]
   );
 
   const selectedCount = useMemo(
@@ -227,15 +204,7 @@ const PYQ = () => {
 
   const handleYearChange = (event) => {
     const nextYear = event.target.value;
-    const query = searchQuery.trim();
-
     dispatch(setSelectedYear(nextYear));
-
-    if (!query) {
-      return;
-    }
-
-    dispatch(searchPyqs({ query, year: nextYear }));
   };
 
   const handleSearchKey = (event) => {
@@ -292,22 +261,42 @@ const PYQ = () => {
     );
   };
 
-  const handleLoadMore = () => {
-    if (searchLoading || bulkDownloading || loadingMore || !hasMore || !nextPageCursor) {
+  const handleNextPage = () => {
+    const hasCachedNextPage = Boolean(pagesByNumber[currentPage + 1]);
+    if (
+      searchLoading
+      || bulkDownloading
+      || loadingMore
+      || (!hasCachedNextPage && (!hasMore || !nextPageCursor))
+    ) {
+      return;
+    }
+
+    if (hasCachedNextPage) {
+      dispatch(showPyqPage(currentPage + 1));
       return;
     }
 
     dispatch(loadMorePyqs());
   };
 
+  const handlePreviousPage = () => {
+    if (currentPage <= 1 || searchLoading || bulkDownloading || loadingMore) {
+      return;
+    }
+
+    dispatch(showPyqPage(currentPage - 1));
+  };
+
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
           gap: "8px",
-          padding: "12px 0"
+          padding: "12px 0",
+          marginLeft: "-8px"
         }}
       >
         <IconButton onClick={handleBack} sx={{ color: theme.colors.secondary }}>
@@ -353,28 +342,13 @@ const PYQ = () => {
           )}
 
           {currentStep === "semesters" && (
-            <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
               <Typography sx={{ fontSize: "13px", color: "#555", marginBottom: "8px" }}>
-                Select semester
+                Select a semester to browse and search its courses
               </Typography>
 
-              <FormControl fullWidth size="small" sx={{ marginBottom: "12px" }}>
-                <Select
-                  value={semesterFilter}
-                  onChange={(event) => dispatch(setSemesterFilter(event.target.value))}
-                  sx={selectSx}
-                >
-                  <MenuItem value="all">All semesters</MenuItem>
-                  {semesters.map((semester) => (
-                    <MenuItem key={semester.value} value={semester.value}>
-                      {semester.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <Box ref={scrollContainerRef} sx={{ flex: 1, overflowY: "auto", paddingBottom: "8px" }}>
-                {filteredSemesters.map((semester) => (
+              <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "8px" }}>
+                {semesters.map((semester) => (
                   <Paper
                     key={semester.value}
                     elevation={0}
@@ -396,7 +370,7 @@ const PYQ = () => {
                   </Paper>
                 ))}
 
-                {filteredSemesters.length === 0 && (
+                {semesters.length === 0 && (
                   <Typography sx={{ fontSize: "13px", color: "#777", textAlign: "center", marginTop: "20px" }}>
                     No semesters found.
                   </Typography>
@@ -420,7 +394,7 @@ const PYQ = () => {
                 sx={{ marginBottom: "12px" }}
               />
 
-              <Box ref={scrollContainerRef} sx={{ flex: 1, overflowY: "auto", paddingBottom: "8px" }}>
+              <Box sx={{ flex: 1, overflowY: "auto", paddingBottom: "8px" }}>
                 {semesterCourses.map((course) => (
                   <Paper
                     key={course.id}
@@ -453,7 +427,7 @@ const PYQ = () => {
           )}
 
           {currentStep === "results" && (
-            <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
               <Typography sx={{ fontSize: "13px", color: "#555", marginBottom: "8px" }}>
                 Search and download PYQs
               </Typography>
@@ -477,8 +451,24 @@ const PYQ = () => {
                   value={searchQuery}
                   onChange={(event) => dispatch(setSearchQuery(event.target.value))}
                   onKeyDown={handleSearchKey}
+                  sx={hasPendingSearch ? {
+                    "& .MuiOutlinedInput-root": {
+                      backgroundColor: theme.colors.secondaryLight,
+                      "& fieldset": { borderColor: theme.colors.secondary, borderWidth: "2px" },
+                      "&:hover fieldset": { borderColor: theme.colors.secondary },
+                      "&.Mui-focused fieldset": { borderColor: theme.colors.secondary }
+                    }
+                  } : undefined}
                 />
-                <FormControl size="small" sx={{ minWidth: "92px" }}>
+                <FormControl size="small" sx={{
+                  minWidth: "92px",
+                  ...(hasPendingSearch ? {
+                    "& .MuiOutlinedInput-root": {
+                      backgroundColor: theme.colors.secondaryLight,
+                      "& fieldset": { borderColor: theme.colors.secondary, borderWidth: "2px" }
+                    }
+                  } : {})
+                }}>
                   <Select
                     value={selectedYear}
                     onChange={handleYearChange}
@@ -498,12 +488,21 @@ const PYQ = () => {
                   sx={{
                     minWidth: "46px",
                     backgroundColor: theme.colors.primary,
+                    color: "#fff",
                     "&:hover": { backgroundColor: theme.colors.primaryHover }
                   }}
                 >
                   <SearchIcon fontSize="small" />
                 </Button>
               </Box>
+
+              {hasPendingSearch && (
+                <Typography sx={{ fontSize: "11px", color: theme.colors.primary, marginTop: "-4px", marginBottom: "8px", fontWeight: 600 }}>
+                  Search settings changed. Click Search to update the results.
+                </Typography>
+              )}
+
+              {pageNotice && <Alert severity="info" sx={blueAlertSx}>{pageNotice}</Alert>}
 
               {searchError && (
                 <Alert severity="error" sx={{ marginBottom: "10px", fontSize: "12px" }}>
@@ -520,21 +519,6 @@ const PYQ = () => {
               {bulkDownloadError && (
                 <Alert severity="error" sx={{ marginBottom: "10px", fontSize: "12px" }}>
                   {bulkDownloadError}
-                </Alert>
-              )}
-
-              {downloadSuccessItemId && (
-                <Alert severity="info" sx={blueAlertSx}>
-                  Download started successfully.
-                </Alert>
-              )}
-
-              {bulkDownloadResult && (
-                <Alert severity="info" sx={blueAlertSx}>
-                  ZIP download started for {bulkDownloadResult.stats?.successful || 0} PYQs.
-                  {(bulkDownloadResult.stats?.failed || 0) > 0
-                    ? ` ${bulkDownloadResult.stats.failed} item(s) could not be added.`
-                    : ""}
                 </Alert>
               )}
 
@@ -564,7 +548,7 @@ const PYQ = () => {
                 </Typography>
               )}
 
-              <Box ref={scrollContainerRef} sx={{ flex: 1, overflowY: "auto", paddingBottom: "8px" }}>
+              <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", paddingBottom: "8px" }}>
                 {!searchLoading && !bulkDownloading && searchResults.length > 0 && (
                   <Paper
                     elevation={0}
@@ -718,9 +702,22 @@ const PYQ = () => {
                 ))}
 
                 {!searchLoading && lastQuery && searchResults.length === 0 && !searchError && (
-                  <Typography sx={{ fontSize: "13px", color: "#777", textAlign: "center", marginTop: "20px" }}>
-                    No PYQs found for this search.
-                  </Typography>
+                  <>
+                    <Typography sx={{ fontSize: "13px", color: "#777", textAlign: "center", marginTop: "20px" }}>
+                      No PYQs found for this search.
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "11px",
+                        color: theme.colors.primary,
+                        textAlign: "center",
+                        paddingTop: "4px",
+                        paddingBottom: "12px"
+                      }}
+                    >
+                    Tip: change the year, then click Search to update the results.
+                    </Typography>
+                  </>
                 )}
 
                 {loadMoreError && (
@@ -729,62 +726,115 @@ const PYQ = () => {
                   </Alert>
                 )}
 
-                {(hasMore || loadingMore) && searchResults.length > 0 && (
-                  <Box
-                    ref={loadMoreSentinelRef}
-                    sx={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "8px",
-                      padding: "12px 0 18px"
-                    }}
-                  >
-                    {loadingMore ? (
-                      <>
-                        <CircularProgress size={20} sx={{ color: theme.colors.primary }} />
-                        <Typography sx={{ fontSize: "11px", color: theme.colors.secondary }}>
-                          Loading more PYQs...
-                        </Typography>
-                      </>
-                    ) : (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={handleLoadMore}
-                        sx={{
-                          textTransform: "none",
-                          color: theme.colors.secondary,
-                          borderColor: "rgba(35, 58, 118, 0.24)",
-                          backgroundColor: "rgba(255, 255, 255, 0.85)",
-                          "&:hover": {
-                            borderColor: theme.colors.secondary,
-                            backgroundColor: theme.colors.secondaryLight
-                          }
-                        }}
-                      >
-                        Load more
-                      </Button>
-                    )}
-                  </Box>
-                )}
+              </Box>
 
-                <Typography
+              {searchResults.length > 0 && (
+                <Box
                   sx={{
-                    fontSize: "11px",
-                    color: "#9a9a9a",
-                    textAlign: "center",
-                    paddingBottom: "10px"
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto 1fr",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "12px 0 4px"
                   }}
                 >
-                  Tip: change year to fetch more papers
-                </Typography>
-              </Box>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handlePreviousPage}
+                    disabled={currentPage <= 1 || loadingMore || searchLoading || bulkDownloading}
+                    sx={{ ...paginationButtonSx, justifySelf: "start" }}
+                  >
+                    Previous
+                  </Button>
+
+                  <Typography sx={{ fontSize: "12px", color: theme.colors.secondary, fontWeight: 600 }}>
+                    {loadingMore ? "Loading..." : `Page ${currentPage}`}
+                  </Typography>
+
+                  <Button
+                    variant="contained"
+                    size="small"
+                    onClick={handleNextPage}
+                    disabled={
+                      loadingMore
+                      || searchLoading
+                      || bulkDownloading
+                      || (!hasMore && !pagesByNumber[currentPage + 1])
+                    }
+                    sx={{ ...paginationButtonSx, justifySelf: "end" }}
+                  >
+                    Next
+                  </Button>
+                </Box>
+              )}
+
+              <Typography
+                sx={{
+                  fontSize: "11px",
+                  color: theme.colors.primary,
+                  textAlign: "center",
+                  paddingTop: "4px",
+                  paddingBottom: "12px"
+                }}
+              >
+                Tip: change the year, then click Search to update the results.
+              </Typography>
             </Box>
           )}
         </>
       )}
+
+      <Snackbar
+        open={Boolean(downloadSuccessItemId)}
+        autoHideDuration={4000}
+        onClose={() => dispatch(clearDownloadFeedback())}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="success"
+          onClose={() => dispatch(clearDownloadFeedback())}
+          sx={{
+            width: "100%",
+            fontSize: "12px",
+            backgroundColor: theme.colors.secondary,
+            color: "#fff",
+            "& .MuiAlert-icon": { color: "#fff" },
+            "& .MuiAlert-message": { color: "#fff" },
+            "& .MuiAlert-action": { color: "#fff" },
+            "& .MuiSvgIcon-root": { color: "#fff" }
+          }}
+        >
+          Download started successfully.
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={Boolean(bulkDownloadResult)}
+        autoHideDuration={6000}
+        onClose={() => dispatch(clearDownloadFeedback())}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="success"
+          onClose={() => dispatch(clearDownloadFeedback())}
+          sx={{
+            width: "100%",
+            fontSize: "12px",
+            backgroundColor: theme.colors.secondary,
+            color: "#fff",
+            "& .MuiAlert-icon": { color: "#fff" },
+            "& .MuiAlert-message": { color: "#fff" },
+            "& .MuiAlert-action": { color: "#fff" },
+            "& .MuiSvgIcon-root": { color: "#fff" }
+          }}
+        >
+          ZIP download started for {bulkDownloadResult?.stats?.successful || 0} PYQs.
+          {(bulkDownloadResult?.stats?.failed || 0) > 0
+            ? ` ${bulkDownloadResult.stats.failed} item(s) could not be added.`
+            : ""}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

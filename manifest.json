@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PESU-MAX",
-  "version": "2.0.7",
+  "version": "3.0.0",
   "action": {
     "default_popup": "src/popup/index.html"
   },
@@ -13,8 +13,7 @@
     "https://www.pesuacademy.com/*",
     "https://files.pesuacademy.com/*",
     "https://staff.pes.edu/*",
-    "http://library.pes.edu/*",
-    "https://library.pes.edu/*",
+    "http://14.143.33.149/*",
     "https://www.ilovepdf.com/*",
     "https://*.ilovepdf.com/*"
   ],
