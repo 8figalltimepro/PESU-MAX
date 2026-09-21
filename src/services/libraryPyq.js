@@ -2,7 +2,7 @@ import JSZip from "jszip";
 import * as cheerio from "cheerio";
 import { load, save } from "../utils/storage.js";
 
-const LIBRARY_BASE_URL = "http://library.pes.edu";
+const LIBRARY_BASE_URL = "http://14.143.33.149";
 const LOGIN_URL = `${LIBRARY_BASE_URL}/MyPage.aspx`;
 const SEARCH_URL = `${LIBRARY_BASE_URL}/Search.aspx`;
 const LIBRARY_GRID_EVENT_TARGET = "GridView1";

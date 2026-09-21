@@ -773,7 +773,7 @@ const PYQ = () => {
                 <Typography
                   sx={{
                     fontSize: "11px",
-                    color: "#9a9a9a",
+                    color: theme.colors.primary,
                     textAlign: "center",
                     paddingBottom: "10px"
                   }}

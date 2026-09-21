@@ -50,7 +50,7 @@ To provide requested functionality, the extension may send requests to:
 - `https://www.pesuacademy.com/*`
 - `https://files.pesuacademy.com/*`
 - `https://staff.pes.edu/*`
-- `http://library.pes.edu/*` and `https://library.pes.edu/*`
+- `http://14.143.33.149/*`
 - `https://www.ilovepdf.com/*` and `https://*.ilovepdf.com/*` (only when the user requests merged PDF output for supported Office files)
 
 PDF files selected for merged download are processed locally in the browser using the `pdf-lib` library and are not sent to a separate third-party merge service.

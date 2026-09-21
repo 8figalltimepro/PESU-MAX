@@ -270,6 +270,20 @@ const pyqSlice = createSlice({
         state.catalogLoading = false;
         state.semesters = action.payload?.semesters || [];
         state.courses = action.payload?.courses || [];
+
+        const latestSemester = state.semesters.reduce((latest, semester) => {
+          const semesterNumber = Number(semester.value);
+
+          if (!Number.isFinite(semesterNumber)) {
+            return latest;
+          }
+
+          return !latest || semesterNumber > Number(latest.value)
+            ? semester
+            : latest;
+        }, null);
+
+        state.semesterFilter = latestSemester?.value || "all";
       })
       .addCase(loadPyqCatalog.rejected, (state, action) => {
         state.catalogLoading = false;
