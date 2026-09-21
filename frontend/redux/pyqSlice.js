@@ -8,8 +8,8 @@ import {
   downloadSelectedCoursePyqsZip
 } from "../../src/services/pyqService.js";
 import {
-  LIBRARY_MEMBER_ID_BASE64,
-  LIBRARY_PASSWORD_BASE64
+  LIBRARY_MEMBER_ID,
+  LIBRARY_PASSWORD
 } from "../constants/constants.js";
 
 const DEFAULT_PYQ_YEAR = String(new Date().getFullYear());
@@ -20,8 +20,8 @@ export const initLibraryAuth = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       return await initializeLibraryLogin({
-        encodedMemberId: LIBRARY_MEMBER_ID_BASE64,
-        encodedPassword: LIBRARY_PASSWORD_BASE64
+        encodedMemberId: LIBRARY_MEMBER_ID,
+        encodedPassword: LIBRARY_PASSWORD
       });
     } catch (error) {
       return rejectWithValue(error.message);
@@ -58,8 +58,8 @@ export const searchPyqs = createAsyncThunk(
       const response = await searchCoursePyqs({
         query,
         year,
-        encodedMemberId: LIBRARY_MEMBER_ID_BASE64,
-        encodedPassword: LIBRARY_PASSWORD_BASE64
+        encodedMemberId: LIBRARY_MEMBER_ID,
+        encodedPassword: LIBRARY_PASSWORD
       });
       return { ...response, searchKey };
     } catch (error) {
@@ -90,13 +90,10 @@ export const loadMorePyqs = createAsyncThunk(
       const response = await loadMoreCoursePyqs({
         query: pyq.lastQuery,
         year: pyq.selectedYear,
-        cursor: activePage.nextPageCursor,
-        loadedCount: Object.values(pyq.pagesByNumber).reduce(
-          (count, page) => count + (page.results?.length || 0),
-          0
-        ),
-        encodedMemberId: LIBRARY_MEMBER_ID_BASE64,
-        encodedPassword: LIBRARY_PASSWORD_BASE64
+        cursor: pyq.nextPageCursor,
+        loadedCount: pyq.searchResults.length,
+        encodedMemberId: LIBRARY_MEMBER_ID,
+        encodedPassword: LIBRARY_PASSWORD
       });
       return { ...response, pageNumber: nextPageNumber };
     } catch (error) {
@@ -118,8 +115,8 @@ export const downloadPyq = createAsyncThunk(
       const data = await downloadCoursePyq({
         downloadPath,
         title,
-        encodedMemberId: LIBRARY_MEMBER_ID_BASE64,
-        encodedPassword: LIBRARY_PASSWORD_BASE64
+        encodedMemberId: LIBRARY_MEMBER_ID,
+        encodedPassword: LIBRARY_PASSWORD
       });
       return { ...data, itemId };
     } catch (error) {
@@ -135,8 +132,8 @@ export const downloadSelectedPyqsZip = createAsyncThunk(
       return await downloadSelectedCoursePyqsZip({
         items,
         query,
-        encodedMemberId: LIBRARY_MEMBER_ID_BASE64,
-        encodedPassword: LIBRARY_PASSWORD_BASE64
+        encodedMemberId: LIBRARY_MEMBER_ID,
+        encodedPassword: LIBRARY_PASSWORD
       });
     } catch (error) {
       return rejectWithValue(error.message);
