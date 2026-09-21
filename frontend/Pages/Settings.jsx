@@ -18,6 +18,11 @@ const Settings = () => {
     getMenuReorderSnapshot,
     getMenuReorderSnapshot
   );
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
+
+  useEffect(() => {
+    load(SESSION_KEEPER_KEY).then((value) => setKeepSignedIn(value === true));
+  }, []);
 
   const handleBack = () => {
     dispatch(setCurrentPage("home"));

@@ -4,8 +4,8 @@ import { resetCsrfToken } from "../helpers/pesuAPI.js";
 const ACADEMY_BASE_URL = "https://www.pesuacademy.com/Academy";
 const PROFILE_PATH = "/s/studentProfilePESU";
 const CREDENTIAL_KEY = "academyAuth";
-// 4 minutes keeps the traffic quiet; an untouched session was measured dying
-// inside five, and a repair (a real login POST) is what has to stay rare.
+export const SESSION_KEEPER_KEY = "sessionKeeperEnabled";
+// Check the session every 4 minutes.
 const PING_INTERVAL_MS = 4 * 60 * 1000;
 const RELOGIN_GUARD_KEY = "pesuMaxReloginAt";
 const REJECT_COUNT_KEY = "pesuMaxRejectCount";
@@ -29,8 +29,7 @@ function loginFormEngaged() {
     Boolean(form && document.activeElement && form.contains(document.activeElement));
 }
 
-// The profile page answers with the login page when the session is dead, so the
-// final URL tells us everything and the body never has to be downloaded.
+// Logged in if the profile URL loads; the body is not needed.
 async function probeSession() {
   const controller = new AbortController();
 
@@ -113,7 +112,11 @@ async function storeCredentials(username, password) {
   });
 }
 
-// Only ever called on a session that works, so a stale pair cannot stick around.
+export async function forgetStoredCredentials() {
+  await remove(CREDENTIAL_KEY);
+}
+
+// Save what the site itself stored, only while logged in.
 async function captureCredentials() {
   const username = localStorage.getItem("clientusername");
   const password = localStorage.getItem("clientpassword");
@@ -152,9 +155,7 @@ async function attemptReLogin() {
     return "ok";
   }
 
-  // A rejection is not proof the stored pair is wrong: the server can demand a
-  // captcha or rate-limit the attempt. Back off, and only discard the pair once
-  // it keeps failing, so a transient refusal cannot break silent re-login.
+  // Keep the credentials on a rejection; the refusal may be temporary.
   const rejections = Number(sessionStorage.getItem(REJECT_COUNT_KEY) || 0) + 1;
   sessionStorage.setItem(REJECT_COUNT_KEY, String(rejections));
   sessionStorage.setItem(RELOGIN_GUARD_KEY, String(Date.now() + REJECT_BACKOFF_MS));
@@ -168,27 +169,19 @@ async function attemptReLogin() {
   return "failed";
 }
 
-// An app page: keep the session warm, and repair it in place when it dies. The
-// page keeps its DOM, scroll and SPA state; only the cookie jar changes.
-// ponytail: a login form open in another tab can still have its token
-// invalidated by this tab's probes; reloading that tab recovers. Coordinate
-// across tabs through localStorage if that ever actually bites.
+// A normal page: keep the session alive and repair it in place when it dies.
+// ponytail: a login form in another tab can still be invalidated by these probes.
 async function settleAppPage() {
   if ((await probeSession()) !== false) return;
 
   await attemptReLogin();
 }
 
-// A login page, where the session is already known to be dead — so nothing here
-// probes. An authenticated request with a dead session makes the site run its
-// own /logout chain, which invalidates the token this form was rendered with and
-// turns a human's login into "Invalid CSRF Token".
+// A login page: never probe here, it invalidates the token in this form.
 async function settleLoginPage() {
   if (loginFormEngaged()) return;
 
-  // The server adds a captcha after repeated logins and the page injects it
-  // client-side, so only the rendered DOM reveals it. Waiting for a human beats
-  // posting an attempt that cannot succeed.
+  // A captcha means a human has to log in, so wait.
   if (document.querySelector("#captchaInput, #captchaImg")) {
     console.warn("[PESU-MAX] academy login is captcha-gated right now; waiting for a manual login");
     sessionStorage.setItem(RELOGIN_GUARD_KEY, String(Date.now() + REJECT_BACKOFF_MS));
@@ -202,12 +195,14 @@ async function settleLoginPage() {
     return;
   }
 
-  // A failed attempt rotates the server session, leaving this form's token
-  // stale, so reload once to hand over a usable form.
+  // The attempt staled this form, so reload once for a usable one.
   if (result === "failed") location.reload();
 }
 
 async function settleSession() {
+  // Off until it is switched on in Settings.
+  if ((await load(SESSION_KEEPER_KEY)) !== true) return;
+
   if (hasLoginForm()) {
     await settleLoginPage();
     return;
