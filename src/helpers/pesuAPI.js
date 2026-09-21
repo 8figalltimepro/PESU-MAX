@@ -5,6 +5,8 @@ let cachedCsrfToken = null;
 let cachedCsrfFetchedAt = 0;
 let csrfTokenPromise = null;
 
+export const resetCsrfToken = () => { cachedCsrfToken = null; cachedCsrfTokenFetchedAt = 0; };
+
 export const CONTENT_TYPE_IDS = {
   slides: 2,
   notes: 3,
