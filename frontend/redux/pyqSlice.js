@@ -15,6 +15,21 @@ import {
 const DEFAULT_PYQ_YEAR = String(new Date().getFullYear());
 const SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
 
+function trimSearchCache(state) {
+  const entries = Object.entries(state.cachedSearches)
+    .filter(([, entry]) => Date.now() - entry.cachedAt < SEARCH_CACHE_TTL_MS
+      && Object.keys(entry.pagesByNumber).length <= 10)
+    .sort((a, b) => b[1].cachedAt - a[1].cachedAt);
+  const bounded = {};
+  let size = 0;
+  for (const [key, entry] of entries.slice(0, 10)) {
+    size += JSON.stringify(entry).length * 2;
+    if (size > 2 * 1024 * 1024) break;
+    bounded[key] = entry;
+  }
+  state.cachedSearches = bounded;
+}
+
 export const initLibraryAuth = createAsyncThunk(
   "pyq/initLibraryAuth",
   async (_, { rejectWithValue }) => {
@@ -42,13 +57,12 @@ export const loadPyqCatalog = createAsyncThunk(
 
 export const searchPyqs = createAsyncThunk(
   "pyq/searchPyqs",
-  async ({ query, year, force = false }, { getState, rejectWithValue }) => {
+  async ({ query, year }, { getState, rejectWithValue }) => {
     const searchKey = `${query.trim().toLowerCase()}::${year || ""}`;
     const cachedSearch = getState().pyq?.cachedSearches?.[searchKey];
 
     if (
-      !force
-      && cachedSearch
+      cachedSearch
       && Date.now() - (cachedSearch.cachedAt || 0) < SEARCH_CACHE_TTL_MS
     ) {
       return { cachedSearch, searchKey, fromCache: true };
@@ -89,9 +103,11 @@ export const loadMorePyqs = createAsyncThunk(
     try {
       const response = await loadMoreCoursePyqs({
         query: pyq.lastQuery,
-        year: pyq.selectedYear,
-        cursor: pyq.nextPageCursor,
-        loadedCount: pyq.searchResults.length,
+        year: pyq.lastSearchYear,
+        cursor: activePage.nextPageCursor,
+        loadedCount: Object.values(pyq.pagesByNumber).reduce(
+          (count, page) => count + page.results.length, 0
+        ),
         encodedMemberId: LIBRARY_MEMBER_ID,
         encodedPassword: LIBRARY_PASSWORD
       });
@@ -156,6 +172,9 @@ const initialState = {
   pagesByNumber: {},
   activeSearchKey: "",
   cachedSearches: {},
+  searchRequestId: null,
+  pageRequestId: null,
+  pageNotice: null,
   totalResults: 0,
   lastQuery: "",
   lastSearchYear: "",
@@ -190,6 +209,10 @@ const pyqSlice = createSlice({
       state.semesterFilter = action.payload;
     },
     setSelectedSemester: (state, action) => {
+      state.searchRequestId = null;
+      state.pageRequestId = null;
+      state.searchLoading = false;
+      state.loadingMore = false;
       state.selectedSemester = action.payload;
       state.selectedCourse = null;
       state.selectedPyqs = {};
@@ -209,6 +232,10 @@ const pyqSlice = createSlice({
       state.loadMoreError = null;
     },
     setSelectedCourse: (state, action) => {
+      state.searchRequestId = null;
+      state.pageRequestId = null;
+      state.searchLoading = false;
+      state.loadingMore = false;
       state.selectedCourse = action.payload;
       state.selectedPyqs = {};
       state.searchQuery = action.payload?.subjectName || "";
@@ -282,7 +309,7 @@ const pyqSlice = createSlice({
       state.bulkDownloadResult = null;
       state.bulkDownloadError = null;
     },
-    resetPyqState: () => initialState
+    resetPyqState: (state) => ({ ...initialState, cachedSearches: state.cachedSearches })
   },
   extraReducers: (builder) => {
     builder
@@ -326,7 +353,10 @@ const pyqSlice = createSlice({
         state.catalogLoading = false;
         state.error = action.payload;
       })
-      .addCase(searchPyqs.pending, (state) => {
+      .addCase(searchPyqs.pending, (state, action) => {
+        state.pageNotice = null;
+        state.searchRequestId = action.meta.requestId;
+        state.pageRequestId = null;
         state.searchLoading = true;
         state.selectedPyqs = {};
         state.searchError = null;
@@ -339,6 +369,8 @@ const pyqSlice = createSlice({
         state.bulkDownloadError = null;
       })
       .addCase(searchPyqs.fulfilled, (state, action) => {
+        if (state.searchRequestId !== action.meta.requestId) return;
+        state.searchRequestId = null;
         state.searchLoading = false;
         state.selectedPyqs = {};
         const cachedSearch = action.payload?.cachedSearch;
@@ -382,8 +414,12 @@ const pyqSlice = createSlice({
         }
         state.loadingMore = false;
         state.loadMoreError = null;
+        trimSearchCache(state);
       })
       .addCase(searchPyqs.rejected, (state, action) => {
+        if (state.searchRequestId !== action.meta.requestId) return;
+        state.searchRequestId = null;
+        state.pagesByNumber = {};
         state.searchLoading = false;
         state.selectedPyqs = {};
         state.searchResults = [];
@@ -396,18 +432,42 @@ const pyqSlice = createSlice({
         state.loadMoreError = null;
         state.searchError = action.payload;
       })
-      .addCase(loadMorePyqs.pending, (state) => {
+      .addCase(loadMorePyqs.pending, (state, action) => {
+        state.pageRequestId = action.meta.requestId;
         state.loadingMore = true;
         state.loadMoreError = null;
       })
       .addCase(loadMorePyqs.fulfilled, (state, action) => {
+        if (state.pageRequestId !== action.meta.requestId) return;
+        state.pageRequestId = null;
         state.loadingMore = false;
-        const pageNumber = action.payload?.cachedPageNumber || action.payload?.pageNumber;
+        const restarted = action.payload?.restarted;
+        const pageNumber = restarted ? 1 : action.payload?.cachedPageNumber || action.payload?.pageNumber;
         if (!pageNumber) {
           return;
         }
 
         if (!action.payload?.cachedPageNumber) {
+          if (restarted) {
+            state.pagesByNumber = {};
+            state.selectedPyqs = {};
+            delete state.cachedSearches[state.activeSearchKey];
+            state.pageNotice = "Your library session expired. Results restarted at page 1.";
+          }
+          const existingIds = new Set(Object.values(state.pagesByNumber).flatMap(
+            (page) => page.results.map((item) => item.downloadPath || item.recordId || item.id)
+          ));
+          const progressed = action.payload?.results?.some(
+            (item) => !existingIds.has(item.downloadPath || item.recordId || item.id)
+          );
+          if (!progressed && !restarted) {
+            state.hasMore = false;
+            state.nextPageCursor = null;
+            state.pagesByNumber[state.currentPage].hasMore = false;
+            state.pagesByNumber[state.currentPage].nextPageCursor = null;
+            delete state.cachedSearches[state.activeSearchKey];
+            return;
+          }
           state.pagesByNumber[pageNumber] = {
             results: action.payload?.results || [],
             totalResults: action.payload?.totalResults || state.totalResults,
@@ -429,12 +489,15 @@ const pyqSlice = createSlice({
             year: state.lastSearchYear,
             totalResults: state.totalResults,
             pagesByNumber: state.pagesByNumber,
-            cachedAt: Date.now()
+            cachedAt: state.cachedSearches[state.activeSearchKey]?.cachedAt || Date.now()
           };
         }
         state.loadMoreError = null;
+        trimSearchCache(state);
       })
       .addCase(loadMorePyqs.rejected, (state, action) => {
+        if (state.pageRequestId !== action.meta.requestId) return;
+        state.pageRequestId = null;
         state.loadingMore = false;
         state.loadMoreError = action.payload;
       })

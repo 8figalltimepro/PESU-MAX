@@ -105,6 +105,7 @@ const PYQ = () => {
     searchError,
     loadingMore,
     loadMoreError,
+    pageNotice,
     downloadingItemId,
     bulkDownloading,
     downloadSuccessItemId,
@@ -497,6 +498,8 @@ const PYQ = () => {
                   Search settings changed. Click Search to update the results.
                 </Typography>
               )}
+
+              {pageNotice && <Alert severity="info" sx={blueAlertSx}>{pageNotice}</Alert>}
 
               {searchError && (
                 <Alert severity="error" sx={{ marginBottom: "10px", fontSize: "12px" }}>

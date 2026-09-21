@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import * as cheerio from "cheerio";
 import { load, save } from "../utils/storage.js";
+import { cachedLibrarySearch, singleFlight, withFileSlot } from "./libraryRequestCache.js";
 
 const LIBRARY_BASE_URL = "http://14.143.33.149";
 const LOGIN_URL = `${LIBRARY_BASE_URL}/MyPage.aspx`;
@@ -191,6 +192,7 @@ async function openSearchPage() {
   });
 
   const html = await response.text();
+  if (!response.ok) throw new Error(`Library unavailable (HTTP ${response.status})`);
   return {
     html,
     fields: extractAspNetFields(html)
@@ -246,6 +248,9 @@ async function loginToLibrary(encodedMemberId, encodedPassword) {
 
   const searchPage = await openSearchPage();
   const searchFields = searchPage.fields;
+  if (!isAuthenticatedPage(searchPage.html) || !searchFields.viewState || !searchFields.eventValidation) {
+    throw new Error("Library login failed");
+  }
 
   const authDetails = {
     isAuthenticated: true,
@@ -280,6 +285,7 @@ async function ensureLibrarySession(encodedMemberId, encodedPassword) {
 
   const hasReusableTokens = Boolean(
     existingCookie?.value
+    && storedAuth.cookieValue === existingCookie.value
     && storedAuth.viewState
     && storedAuth.eventValidation
     && Date.now() - (storedAuth.updatedAt || 0) < LIBRARY_AUTH_CACHE_TTL_MS
@@ -317,30 +323,61 @@ async function ensureLibrarySession(encodedMemberId, encodedPassword) {
 
 function isAuthenticationResponse(payload) {
   const normalizedPayload = (payload || "").toLowerCase();
-  return normalizedPayload.includes("txtmemberid")
+  return /\|pageredirect\|[^|]*\|?[^|]*mypage\.aspx/i.test(payload || "")
+    || (normalizedPayload.includes("txtmemberid")
     && normalizedPayload.includes("txtpassword")
-    && !normalizedPayload.includes("gridview1");
+    && !isAuthenticatedPage(payload)
+    && !normalizedPayload.includes("gridview1"));
 }
 
-async function fetchLibraryFile(absoluteUrl, encodedMemberId, encodedPassword) {
-  let response = await trackedLibraryFetch("pdf", absoluteUrl, {
-    method: "GET",
-    credentials: "include"
-  });
+const pdfCache = new Map();
+let pdfCacheBytes = 0;
+const PDF_CACHE_LIMIT = 20 * 1024 * 1024;
 
-  const contentType = response.headers.get("Content-Type") || "";
-  if (contentType.includes("text/html")) {
-    const responseHtml = await response.clone().text();
-    if (isAuthenticationResponse(responseHtml)) {
-      await loginWithCoalescing(encodedMemberId, encodedPassword);
-      response = await trackedLibraryFetch("pdf-retry", absoluteUrl, {
-        method: "GET",
-        credentials: "include"
-      });
+async function fetchLibraryFile(absoluteUrl, encodedMemberId, encodedPassword) {
+  const key = JSON.stringify([encodedMemberId, absoluteUrl]);
+  for (const [entryKey, entry] of pdfCache) {
+    if (Date.now() - entry.savedAt >= LIBRARY_AUTH_CACHE_TTL_MS) {
+      pdfCacheBytes -= entry.buffer.byteLength;
+      pdfCache.delete(entryKey);
     }
   }
-
-  return response;
+  const cached = pdfCache.get(key);
+  const buffer = cached?.buffer || await singleFlight(`pdf:${key}`, () => withFileSlot(async () => {
+    const originalCookie = (await getLibraryAuthCookie())?.value;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await trackedLibraryFetch(attempt ? "pdf-retry" : "pdf", absoluteUrl, {
+        method: "GET", credentials: "include"
+      });
+      const buffer = await response.arrayBuffer();
+      const prefix = new TextDecoder().decode(buffer.slice(0, 1024));
+      const expired = response.status === 401 || response.status === 403
+        || /mypage\.aspx/i.test(response.url)
+        || isAuthenticationResponse(new TextDecoder().decode(buffer.slice(0, 65536)));
+      if (expired) {
+        if (attempt) throw new Error("Library session expired. Please retry your download.");
+        const cookie = (await getLibraryAuthCookie())?.value;
+        if (!cookie || cookie === originalCookie) {
+          await loginWithCoalescing(encodedMemberId, encodedPassword);
+        }
+        continue;
+      }
+      if (!response.ok) throw new Error(`Unable to download file (HTTP ${response.status})`);
+      if (!prefix.startsWith("%PDF-")) throw new Error("Library returned an invalid PDF.");
+      if (buffer.byteLength <= PDF_CACHE_LIMIT) {
+        while (pdfCache.size >= 10 || pdfCacheBytes + buffer.byteLength > PDF_CACHE_LIMIT) {
+          const oldestKey = pdfCache.keys().next().value;
+          pdfCacheBytes -= pdfCache.get(oldestKey).buffer.byteLength;
+          pdfCache.delete(oldestKey);
+        }
+        pdfCache.set(key, { buffer, savedAt: Date.now() });
+        pdfCacheBytes += buffer.byteLength;
+      }
+      return buffer;
+    }
+    throw new Error("Unable to download PDF.");
+  }));
+  return new Response(buffer, { headers: { "Content-Type": "application/pdf" } });
 }
 
 function parseResultRow($, rowElement, index) {
@@ -511,8 +548,19 @@ async function sendLibrarySearchRequest(formData, requestType = "search-submit")
 
   const responseText = await searchResponse.text();
 
+  if (searchResponse.status === 401 || searchResponse.status === 403
+    || /mypage\.aspx/i.test(searchResponse.url) || isAuthenticationResponse(responseText)) {
+    throw Object.assign(new Error("Library session expired"), { recoverable: true });
+  }
+  if (/validation of viewstate|invalid postback|invalid viewstate/i.test(responseText)) {
+    throw Object.assign(new Error("Library search state expired"), { recoverable: true });
+  }
   if (!searchResponse.ok) {
     throw new Error(`Library search failed (HTTP ${searchResponse.status})`);
+  }
+
+  if (!/GridView1|id=["']Label2["']|\bLabel2\|/i.test(responseText)) {
+    throw new Error("Unexpected library search response. Please refresh the search.");
   }
 
   return responseText;
@@ -543,7 +591,7 @@ function buildPaginatedSearchResponse({ query, parsed, fields, pageIndex, loaded
     parsed.totalResults || 0,
     loadedAfterPage + (parsed.hasNextPage ? 1 : 0)
   );
-  const hasMore = Boolean(parsed.hasNextPage || loadedAfterPage < derivedTotalResults);
+  const hasMore = Boolean(parsed.hasNextPage && parsed.results.length > 0);
 
   return {
     query,
@@ -665,7 +713,12 @@ export async function loginLibraryWithCredentials({ encodedMemberId, encodedPass
   return ensureLibrarySession(encodedMemberId, encodedPassword);
 }
 
-export async function searchLibraryPyqs({ query, year, encodedMemberId, encodedPassword }) {
+export function searchLibraryPyqs(args) {
+  const key = JSON.stringify([args.encodedMemberId, normalizeText(args.query).toLowerCase(), normalizeText(args.year)]);
+  return cachedLibrarySearch(key, () => performLibrarySearch(args));
+}
+
+async function performLibrarySearch({ query, year, encodedMemberId, encodedPassword }) {
   const cleanQuery = normalizeText(query);
   const cleanYear = normalizeText(year);
   if (!cleanQuery) {
@@ -689,9 +742,11 @@ export async function searchLibraryPyqs({ query, year, encodedMemberId, encodedP
     viewStateGenerator
   });
 
-  let responseText = await sendLibrarySearchRequest(payload, "search-submit");
-
-  if (isAuthenticationResponse(responseText)) {
+  let responseText;
+  try {
+    responseText = await sendLibrarySearchRequest(payload, "search-submit");
+  } catch (error) {
+    if (!error.recoverable) throw error;
     auth = await loginWithCoalescing(encodedMemberId, encodedPassword);
     viewState = auth.viewState;
     eventValidation = auth.eventValidation;
@@ -734,7 +789,12 @@ export async function searchLibraryPyqs({ query, year, encodedMemberId, encodedP
   });
 }
 
-export async function loadMoreLibraryPyqs({
+export function loadMoreLibraryPyqs(args) {
+  const key = JSON.stringify([args.encodedMemberId, args.query, args.year, args.cursor]);
+  return cachedLibrarySearch(key, () => performLibraryNextPage(args));
+}
+
+async function performLibraryNextPage({
   query,
   year,
   cursor,
@@ -752,7 +812,7 @@ export async function loadMoreLibraryPyqs({
     throw new Error("No next page is available for this search");
   }
 
-  let auth = await ensureLibrarySession(encodedMemberId, encodedPassword);
+  const auth = (await load("libraryAuth")) || {};
   const payload = buildPaginationPayload({
     query: cleanQuery,
     year: cleanYear,
@@ -762,11 +822,17 @@ export async function loadMoreLibraryPyqs({
     direction: "next"
   });
 
-  let responseText = await sendLibrarySearchRequest(payload, "pagination-submit");
-
-  if (isAuthenticationResponse(responseText)) {
-    auth = await loginWithCoalescing(encodedMemberId, encodedPassword);
-    responseText = await sendLibrarySearchRequest(payload, "pagination-retry");
+  let responseText;
+  try {
+    responseText = await sendLibrarySearchRequest(payload, "pagination-submit");
+  } catch (error) {
+    if (!error.recoverable) throw error;
+    // An old page cursor cannot safely be replayed under a fresh session.
+    // Restart at page one instead of fetching every intermediate page.
+    await loginWithCoalescing(encodedMemberId, encodedPassword);
+    return { ...(await performLibrarySearch({
+      query: cleanQuery, year: cleanYear, encodedMemberId, encodedPassword
+    })), restarted: true };
   }
   const parsed = parseSearchResults(responseText, cleanQuery);
   const deltaFields = extractAspNetFieldsFromDelta(responseText);
@@ -810,8 +876,6 @@ export async function downloadLibraryPyq({
     throw new Error("Invalid download URL");
   }
 
-  await ensureLibrarySession(encodedMemberId, encodedPassword);
-
   const fileResponse = await fetchLibraryFile(
     absoluteUrl,
     encodedMemberId,
@@ -850,8 +914,6 @@ export async function downloadLibraryPyqsZip({
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error("No PYQs selected for ZIP download");
   }
-
-  await ensureLibrarySession(encodedMemberId, encodedPassword);
 
   const zip = new JSZip();
   const failedItems = [];
