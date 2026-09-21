@@ -702,9 +702,22 @@ const PYQ = () => {
                 ))}
 
                 {!searchLoading && lastQuery && searchResults.length === 0 && !searchError && (
-                  <Typography sx={{ fontSize: "13px", color: "#777", textAlign: "center", marginTop: "20px" }}>
-                    No PYQs found for this search.
-                  </Typography>
+                  <>
+                    <Typography sx={{ fontSize: "13px", color: "#777", textAlign: "center", marginTop: "20px" }}>
+                      No PYQs found for this search.
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "11px",
+                        color: theme.colors.primary,
+                        textAlign: "center",
+                        paddingTop: "4px",
+                        paddingBottom: "12px"
+                      }}
+                    >
+                    Tip: change the year, then click Search to update the results.
+                    </Typography>
+                  </>
                 )}
 
                 {loadMoreError && (
