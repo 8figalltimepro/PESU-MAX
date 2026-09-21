@@ -13,6 +13,11 @@ const Settings = () => {
   useSelector((state) => state.sidebar.isOpen);
   const isEditing = isMenuEditActive();
   const canReorder = canEditMenu();
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
+
+  useEffect(() => {
+    load(SESSION_KEEPER_KEY).then((value) => setKeepSignedIn(value === true));
+  }, []);
 
   const handleBack = () => {
     dispatch(setCurrentPage("home"));
