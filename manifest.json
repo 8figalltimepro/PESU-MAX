@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PESU-MAX",
-  "version": "2.0.7",
+  "version": "3.0.0",
   "action": {
     "default_popup": "src/popup/index.html"
   },
