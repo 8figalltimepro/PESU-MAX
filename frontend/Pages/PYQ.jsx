@@ -10,6 +10,7 @@ import {
   MenuItem,
   Paper,
   Select,
+  Snackbar,
   TextField,
   Typography
 } from "@mui/material";
@@ -145,8 +146,10 @@ const PYQ = () => {
   );
 
   const hasPendingSearch = Boolean(
-    searchQuery.trim()
+    lastQuery
+    && searchQuery.trim()
     && (searchQuery.trim() !== lastQuery || selectedYear !== lastSearchYear)
+    && !searchLoading
   );
 
   const selectableResults = useMemo(
@@ -519,21 +522,6 @@ const PYQ = () => {
                 </Alert>
               )}
 
-              {downloadSuccessItemId && (
-                <Alert severity="info" sx={blueAlertSx}>
-                  Download started successfully.
-                </Alert>
-              )}
-
-              {bulkDownloadResult && (
-                <Alert severity="info" sx={blueAlertSx}>
-                  ZIP download started for {bulkDownloadResult.stats?.successful || 0} PYQs.
-                  {(bulkDownloadResult.stats?.failed || 0) > 0
-                    ? ` ${bulkDownloadResult.stats.failed} item(s) could not be added.`
-                    : ""}
-                </Alert>
-              )}
-
               {(searchLoading || bulkDownloading) && (
                 <Box
                   sx={{
@@ -783,6 +771,57 @@ const PYQ = () => {
           )}
         </>
       )}
+
+      <Snackbar
+        open={Boolean(downloadSuccessItemId)}
+        autoHideDuration={4000}
+        onClose={() => dispatch(clearDownloadFeedback())}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="success"
+          onClose={() => dispatch(clearDownloadFeedback())}
+          sx={{
+            width: "100%",
+            fontSize: "12px",
+            backgroundColor: theme.colors.secondary,
+            color: "#fff",
+            "& .MuiAlert-icon": { color: "#fff" },
+            "& .MuiAlert-message": { color: "#fff" },
+            "& .MuiAlert-action": { color: "#fff" },
+            "& .MuiSvgIcon-root": { color: "#fff" }
+          }}
+        >
+          Download started successfully.
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={Boolean(bulkDownloadResult)}
+        autoHideDuration={6000}
+        onClose={() => dispatch(clearDownloadFeedback())}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          severity="success"
+          onClose={() => dispatch(clearDownloadFeedback())}
+          sx={{
+            width: "100%",
+            fontSize: "12px",
+            backgroundColor: theme.colors.secondary,
+            color: "#fff",
+            "& .MuiAlert-icon": { color: "#fff" },
+            "& .MuiAlert-message": { color: "#fff" },
+            "& .MuiAlert-action": { color: "#fff" },
+            "& .MuiSvgIcon-root": { color: "#fff" }
+          }}
+        >
+          ZIP download started for {bulkDownloadResult?.stats?.successful || 0} PYQs.
+          {(bulkDownloadResult?.stats?.failed || 0) > 0
+            ? ` ${bulkDownloadResult.stats.failed} item(s) could not be added.`
+            : ""}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
