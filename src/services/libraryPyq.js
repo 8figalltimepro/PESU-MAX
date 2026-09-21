@@ -6,6 +6,37 @@ const LIBRARY_BASE_URL = "http://14.143.33.149";
 const LOGIN_URL = `${LIBRARY_BASE_URL}/MyPage.aspx`;
 const SEARCH_URL = `${LIBRARY_BASE_URL}/Search.aspx`;
 const LIBRARY_GRID_EVENT_TARGET = "GridView1";
+const LIBRARY_AUTH_CACHE_TTL_MS = 15 * 60 * 1000;
+
+let loginInFlight = null;
+const libraryRequestCounts = {};
+
+async function trackedLibraryFetch(requestType, url, options) {
+  libraryRequestCounts[requestType] = (libraryRequestCounts[requestType] || 0) + 1;
+  const startedAt = Date.now();
+
+  try {
+    const response = await fetch(url, options);
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[PESU-MAX library request]", {
+        requestType,
+        count: libraryRequestCounts[requestType],
+        status: response.status,
+        durationMs: Date.now() - startedAt
+      });
+    }
+    return response;
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[PESU-MAX library request failed]", {
+        requestType,
+        count: libraryRequestCounts[requestType],
+        durationMs: Date.now() - startedAt
+      });
+    }
+    throw error;
+  }
+}
 
 function normalizeText(value) {
   return (value || "").replace(/\s+/g, " ").trim();
@@ -154,7 +185,7 @@ async function saveLibraryAuth(details) {
 }
 
 async function openSearchPage() {
-  const response = await fetch(SEARCH_URL, {
+  const response = await trackedLibraryFetch("search-page", SEARCH_URL, {
     method: "GET",
     credentials: "include"
   });
@@ -174,7 +205,7 @@ async function loginToLibrary(encodedMemberId, encodedPassword) {
     throw new Error("Missing library credentials");
   }
 
-  const loginPageResponse = await fetch(LOGIN_URL, {
+  const loginPageResponse = await trackedLibraryFetch("login-page", LOGIN_URL, {
     method: "GET",
     credentials: "include"
   });
@@ -195,7 +226,7 @@ async function loginToLibrary(encodedMemberId, encodedPassword) {
     signin: "Sign In"
   });
 
-  const loginResponse = await fetch(LOGIN_URL, {
+  const loginResponse = await trackedLibraryFetch("login-submit", LOGIN_URL, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -232,25 +263,84 @@ async function loginToLibrary(encodedMemberId, encodedPassword) {
   return authDetails;
 }
 
-async function ensureLibrarySession(encodedMemberId, encodedPassword) {
-  const existingCookie = await getLibraryAuthCookie();
-  const searchPage = await openSearchPage();
-
-  if (existingCookie?.value && isAuthenticatedPage(searchPage.html)) {
-    const authDetails = {
-      isAuthenticated: true,
-      cookieName: ".ASPXFORMSAUTH",
-      cookieValue: existingCookie.value,
-      viewState: searchPage.fields.viewState,
-      eventValidation: searchPage.fields.eventValidation,
-      viewStateGenerator: searchPage.fields.viewStateGenerator
-    };
-
-    await saveLibraryAuth(authDetails);
-    return authDetails;
+function loginWithCoalescing(encodedMemberId, encodedPassword) {
+  if (!loginInFlight) {
+    loginInFlight = loginToLibrary(encodedMemberId, encodedPassword)
+      .finally(() => {
+        loginInFlight = null;
+      });
   }
 
-  return loginToLibrary(encodedMemberId, encodedPassword);
+  return loginInFlight;
+}
+
+async function ensureLibrarySession(encodedMemberId, encodedPassword) {
+  const existingCookie = await getLibraryAuthCookie();
+  const storedAuth = (await load("libraryAuth")) || {};
+
+  const hasReusableTokens = Boolean(
+    existingCookie?.value
+    && storedAuth.viewState
+    && storedAuth.eventValidation
+    && Date.now() - (storedAuth.updatedAt || 0) < LIBRARY_AUTH_CACHE_TTL_MS
+  );
+
+  if (hasReusableTokens) {
+    return {
+      ...storedAuth,
+      isAuthenticated: true,
+      cookieName: ".ASPXFORMSAUTH",
+      cookieValue: existingCookie.value
+    };
+  }
+
+  if (existingCookie?.value) {
+    const searchPage = await openSearchPage();
+
+    if (isAuthenticatedPage(searchPage.html)) {
+      const authDetails = {
+        isAuthenticated: true,
+        cookieName: ".ASPXFORMSAUTH",
+        cookieValue: existingCookie.value,
+        viewState: searchPage.fields.viewState,
+        eventValidation: searchPage.fields.eventValidation,
+        viewStateGenerator: searchPage.fields.viewStateGenerator
+      };
+
+      await saveLibraryAuth(authDetails);
+      return authDetails;
+    }
+  }
+
+  return loginWithCoalescing(encodedMemberId, encodedPassword);
+}
+
+function isAuthenticationResponse(payload) {
+  const normalizedPayload = (payload || "").toLowerCase();
+  return normalizedPayload.includes("txtmemberid")
+    && normalizedPayload.includes("txtpassword")
+    && !normalizedPayload.includes("gridview1");
+}
+
+async function fetchLibraryFile(absoluteUrl, encodedMemberId, encodedPassword) {
+  let response = await trackedLibraryFetch("pdf", absoluteUrl, {
+    method: "GET",
+    credentials: "include"
+  });
+
+  const contentType = response.headers.get("Content-Type") || "";
+  if (contentType.includes("text/html")) {
+    const responseHtml = await response.clone().text();
+    if (isAuthenticationResponse(responseHtml)) {
+      await loginWithCoalescing(encodedMemberId, encodedPassword);
+      response = await trackedLibraryFetch("pdf-retry", absoluteUrl, {
+        method: "GET",
+        credentials: "include"
+      });
+    }
+  }
+
+  return response;
 }
 
 function parseResultRow($, rowElement, index) {
@@ -407,8 +497,8 @@ function buildPaginationPayload({ query, year, viewState, eventValidation, viewS
   });
 }
 
-async function sendLibrarySearchRequest(formData) {
-  const searchResponse = await fetch(SEARCH_URL, {
+async function sendLibrarySearchRequest(formData, requestType = "search-submit") {
+  const searchResponse = await trackedLibraryFetch(requestType, SEARCH_URL, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -582,18 +672,16 @@ export async function searchLibraryPyqs({ query, year, encodedMemberId, encodedP
     throw new Error("Search query is required");
   }
 
-  const auth = await ensureLibrarySession(encodedMemberId, encodedPassword);
-
-  const searchPage = await openSearchPage();
-  const viewState = searchPage.fields.viewState || auth.viewState;
-  const eventValidation = searchPage.fields.eventValidation || auth.eventValidation;
-  const viewStateGenerator = searchPage.fields.viewStateGenerator || auth.viewStateGenerator;
+  let auth = await ensureLibrarySession(encodedMemberId, encodedPassword);
+  let viewState = auth.viewState;
+  let eventValidation = auth.eventValidation;
+  let viewStateGenerator = auth.viewStateGenerator;
 
   if (!viewState || !eventValidation) {
     throw new Error("Unable to fetch library search tokens");
   }
 
-  const payload = buildSearchPayload({
+  let payload = buildSearchPayload({
     query: cleanQuery,
     year: cleanYear,
     viewState,
@@ -601,7 +689,22 @@ export async function searchLibraryPyqs({ query, year, encodedMemberId, encodedP
     viewStateGenerator
   });
 
-  const responseText = await sendLibrarySearchRequest(payload);
+  let responseText = await sendLibrarySearchRequest(payload, "search-submit");
+
+  if (isAuthenticationResponse(responseText)) {
+    auth = await loginWithCoalescing(encodedMemberId, encodedPassword);
+    viewState = auth.viewState;
+    eventValidation = auth.eventValidation;
+    viewStateGenerator = auth.viewStateGenerator;
+    payload = buildSearchPayload({
+      query: cleanQuery,
+      year: cleanYear,
+      viewState,
+      eventValidation,
+      viewStateGenerator
+    });
+    responseText = await sendLibrarySearchRequest(payload, "search-retry");
+  }
   const parsed = parseSearchResults(responseText, cleanQuery);
   const deltaFields = extractAspNetFieldsFromDelta(responseText);
   const cookie = await getLibraryAuthCookie();
@@ -649,7 +752,7 @@ export async function loadMoreLibraryPyqs({
     throw new Error("No next page is available for this search");
   }
 
-  const auth = await ensureLibrarySession(encodedMemberId, encodedPassword);
+  let auth = await ensureLibrarySession(encodedMemberId, encodedPassword);
   const payload = buildPaginationPayload({
     query: cleanQuery,
     year: cleanYear,
@@ -659,7 +762,12 @@ export async function loadMoreLibraryPyqs({
     direction: "next"
   });
 
-  const responseText = await sendLibrarySearchRequest(payload);
+  let responseText = await sendLibrarySearchRequest(payload, "pagination-submit");
+
+  if (isAuthenticationResponse(responseText)) {
+    auth = await loginWithCoalescing(encodedMemberId, encodedPassword);
+    responseText = await sendLibrarySearchRequest(payload, "pagination-retry");
+  }
   const parsed = parseSearchResults(responseText, cleanQuery);
   const deltaFields = extractAspNetFieldsFromDelta(responseText);
   const cookie = await getLibraryAuthCookie();
@@ -704,10 +812,11 @@ export async function downloadLibraryPyq({
 
   await ensureLibrarySession(encodedMemberId, encodedPassword);
 
-  const fileResponse = await fetch(absoluteUrl, {
-    method: "GET",
-    credentials: "include"
-  });
+  const fileResponse = await fetchLibraryFile(
+    absoluteUrl,
+    encodedMemberId,
+    encodedPassword
+  );
 
   if (!fileResponse.ok) {
     throw new Error(`Unable to download file (HTTP ${fileResponse.status})`);
@@ -748,40 +857,55 @@ export async function downloadLibraryPyqsZip({
   const failedItems = [];
   let successful = 0;
 
+  const uniqueItems = Array.from(
+    new Map(items.map((item) => [item.downloadPath, item])).values()
+  );
+  const queue = uniqueItems.map((item, index) => ({ item, index }));
+  const workerCount = Math.min(3, queue.length);
+
   await Promise.all(
-    items.map(async (item, index) => {
-      try {
-        const absoluteUrl = toAbsoluteLibraryUrl(item.downloadPath);
-        if (!absoluteUrl) {
-          throw new Error("Invalid download URL");
+    Array.from({ length: workerCount }, async () => {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (!next) {
+          return;
         }
 
-        const fileResponse = await fetch(absoluteUrl, {
-          method: "GET",
-          credentials: "include"
-        });
+        const { item, index } = next;
+        try {
+          const absoluteUrl = toAbsoluteLibraryUrl(item.downloadPath);
+          if (!absoluteUrl) {
+            throw new Error("Invalid download URL");
+          }
 
-        if (!fileResponse.ok) {
-          throw new Error(`HTTP ${fileResponse.status}`);
+          const fileResponse = await fetchLibraryFile(
+            absoluteUrl,
+            encodedMemberId,
+            encodedPassword
+          );
+
+          if (!fileResponse.ok) {
+            throw new Error(`HTTP ${fileResponse.status}`);
+          }
+
+          const fileBlob = await fileResponse.blob();
+          const fileBuffer = await fileBlob.arrayBuffer();
+          const fallbackName = `PYQ_${index + 1}`;
+          const safeName = sanitizeFilename(item.title || fallbackName) || fallbackName;
+          const fileName = `${String(index + 1).padStart(2, "0")}_${ensurePdfExtension(safeName)}`;
+
+          zip.file(fileName, fileBuffer, {
+            binary: true,
+            compression: "STORE"
+          });
+          successful += 1;
+        } catch (error) {
+          failedItems.push({
+            id: item.id,
+            title: item.title || "Unknown PYQ",
+            error: error.message || "Unknown error"
+          });
         }
-
-        const fileBlob = await fileResponse.blob();
-        const fileBuffer = await fileBlob.arrayBuffer();
-        const fallbackName = `PYQ_${index + 1}`;
-        const safeName = sanitizeFilename(item.title || fallbackName) || fallbackName;
-        const fileName = `${String(index + 1).padStart(2, "0")}_${ensurePdfExtension(safeName)}`;
-
-        zip.file(fileName, fileBuffer, {
-          binary: true,
-          compression: "STORE"
-        });
-        successful += 1;
-      } catch (error) {
-        failedItems.push({
-          id: item.id,
-          title: item.title || "Unknown PYQ",
-          error: error.message || "Unknown error"
-        });
       }
     })
   );
@@ -805,7 +929,7 @@ export async function downloadLibraryPyqsZip({
     downloadId,
     fileName,
     stats: {
-      total: items.length,
+      total: uniqueItems.length,
       successful,
       failed: failedItems.length,
       failedItems

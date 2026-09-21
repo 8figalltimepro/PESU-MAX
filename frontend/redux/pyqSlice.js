@@ -13,6 +13,7 @@ import {
 } from "../constants/constants.js";
 
 const DEFAULT_PYQ_YEAR = String(new Date().getFullYear());
+const SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
 
 export const initLibraryAuth = createAsyncThunk(
   "pyq/initLibraryAuth",
@@ -41,17 +42,32 @@ export const loadPyqCatalog = createAsyncThunk(
 
 export const searchPyqs = createAsyncThunk(
   "pyq/searchPyqs",
-  async ({ query, year }, { rejectWithValue }) => {
+  async ({ query, year, force = false }, { getState, rejectWithValue }) => {
+    const searchKey = `${query.trim().toLowerCase()}::${year || ""}`;
+    const cachedSearch = getState().pyq?.cachedSearches?.[searchKey];
+
+    if (
+      !force
+      && cachedSearch
+      && Date.now() - (cachedSearch.cachedAt || 0) < SEARCH_CACHE_TTL_MS
+    ) {
+      return { cachedSearch, searchKey, fromCache: true };
+    }
+
     try {
-      return await searchCoursePyqs({
+      const response = await searchCoursePyqs({
         query,
         year,
         encodedMemberId: LIBRARY_MEMBER_ID_BASE64,
         encodedPassword: LIBRARY_PASSWORD_BASE64
       });
+      return { ...response, searchKey };
     } catch (error) {
       return rejectWithValue(error.message);
     }
+  },
+  {
+    condition: (_, { getState }) => !getState().pyq?.searchLoading
   }
 );
 
@@ -59,22 +75,38 @@ export const loadMorePyqs = createAsyncThunk(
   "pyq/loadMorePyqs",
   async (_, { getState, rejectWithValue }) => {
     const { pyq } = getState();
+    const nextPageNumber = (pyq?.currentPage || 1) + 1;
+    const activePage = pyq?.pagesByNumber?.[pyq.currentPage];
 
-    if (!pyq?.hasMore || !pyq?.nextPageCursor) {
+    if (pyq?.pagesByNumber?.[nextPageNumber]) {
+      return { cachedPageNumber: nextPageNumber };
+    }
+
+    if (!activePage?.hasMore || !activePage?.nextPageCursor) {
       return rejectWithValue("No more PYQs to load");
     }
 
     try {
-      return await loadMoreCoursePyqs({
+      const response = await loadMoreCoursePyqs({
         query: pyq.lastQuery,
         year: pyq.selectedYear,
-        cursor: pyq.nextPageCursor,
-        loadedCount: pyq.searchResults.length,
+        cursor: activePage.nextPageCursor,
+        loadedCount: Object.values(pyq.pagesByNumber).reduce(
+          (count, page) => count + (page.results?.length || 0),
+          0
+        ),
         encodedMemberId: LIBRARY_MEMBER_ID_BASE64,
         encodedPassword: LIBRARY_PASSWORD_BASE64
       });
+      return { ...response, pageNumber: nextPageNumber };
     } catch (error) {
       return rejectWithValue(error.message);
+    }
+  },
+  {
+    condition: (_, { getState }) => {
+      const pyq = getState().pyq;
+      return !pyq?.loadingMore && !pyq?.searchLoading && !pyq?.bulkDownloading;
     }
   }
 );
@@ -123,8 +155,13 @@ const initialState = {
   courseSearch: "",
   searchQuery: "",
   searchResults: [],
+  currentPage: 1,
+  pagesByNumber: {},
+  activeSearchKey: "",
+  cachedSearches: {},
   totalResults: 0,
   lastQuery: "",
+  lastSearchYear: "",
   selectedYear: DEFAULT_PYQ_YEAR,
   hasMore: false,
   nextPageCursor: null,
@@ -145,25 +182,6 @@ const initialState = {
   bulkDownloadError: null
 };
 
-function mergeUniquePyqResults(existingResults = [], incomingResults = []) {
-  const mergedResults = [...existingResults];
-  const seenKeys = new Set(
-    existingResults.map((item) => item.downloadPath || item.recordId || item.id)
-  );
-
-  incomingResults.forEach((item) => {
-    const resultKey = item.downloadPath || item.recordId || item.id;
-    if (seenKeys.has(resultKey)) {
-      return;
-    }
-
-    seenKeys.add(resultKey);
-    mergedResults.push(item);
-  });
-
-  return mergedResults;
-}
-
 const pyqSlice = createSlice({
   name: "pyq",
   initialState,
@@ -180,8 +198,12 @@ const pyqSlice = createSlice({
       state.selectedPyqs = {};
       state.courseSearch = "";
       state.searchResults = [];
+      state.currentPage = 1;
+      state.pagesByNumber = {};
+      state.activeSearchKey = "";
       state.totalResults = 0;
       state.lastQuery = "";
+      state.lastSearchYear = "";
       state.selectedYear = DEFAULT_PYQ_YEAR;
       state.hasMore = false;
       state.nextPageCursor = null;
@@ -194,8 +216,12 @@ const pyqSlice = createSlice({
       state.selectedPyqs = {};
       state.searchQuery = action.payload?.subjectName || "";
       state.searchResults = [];
+      state.currentPage = 1;
+      state.pagesByNumber = {};
+      state.activeSearchKey = "";
       state.totalResults = 0;
       state.lastQuery = "";
+      state.lastSearchYear = "";
       state.selectedYear = DEFAULT_PYQ_YEAR;
       state.hasMore = false;
       state.nextPageCursor = null;
@@ -214,6 +240,20 @@ const pyqSlice = createSlice({
       state.searchError = null;
       state.loadMoreError = null;
       state.downloadSuccessItemId = null;
+    },
+    showPyqPage: (state, action) => {
+      const pageNumber = action.payload;
+      const page = state.pagesByNumber[pageNumber];
+      if (!page) {
+        return;
+      }
+
+      state.currentPage = pageNumber;
+      state.searchResults = page.results || [];
+      state.totalResults = page.totalResults || state.totalResults;
+      state.hasMore = Boolean(page.hasMore);
+      state.nextPageCursor = page.nextPageCursor || null;
+      state.loadMoreError = null;
     },
     setSelectedYear: (state, action) => {
       state.selectedYear = action.payload;
@@ -304,11 +344,45 @@ const pyqSlice = createSlice({
       .addCase(searchPyqs.fulfilled, (state, action) => {
         state.searchLoading = false;
         state.selectedPyqs = {};
-        state.searchResults = action.payload?.results || [];
-        state.totalResults = action.payload?.totalResults || 0;
-        state.lastQuery = action.payload?.query || "";
-        state.hasMore = Boolean(action.payload?.hasMore);
-        state.nextPageCursor = action.payload?.nextCursor || null;
+        const cachedSearch = action.payload?.cachedSearch;
+
+        if (cachedSearch) {
+          state.pagesByNumber = cachedSearch.pagesByNumber;
+          state.currentPage = 1;
+          state.activeSearchKey = action.payload.searchKey;
+          state.lastQuery = cachedSearch.query;
+          state.lastSearchYear = cachedSearch.year;
+          state.totalResults = cachedSearch.totalResults;
+          const firstPage = cachedSearch.pagesByNumber[1];
+          state.searchResults = firstPage?.results || [];
+          state.hasMore = Boolean(firstPage?.hasMore);
+          state.nextPageCursor = firstPage?.nextPageCursor || null;
+        } else {
+          const firstPage = {
+            results: action.payload?.results || [],
+            totalResults: action.payload?.totalResults || 0,
+            hasMore: Boolean(action.payload?.hasMore),
+            nextPageCursor: action.payload?.nextCursor || null
+          };
+          state.currentPage = 1;
+          state.pagesByNumber = { 1: firstPage };
+          state.activeSearchKey = action.payload?.searchKey || "";
+          state.searchResults = firstPage.results;
+          state.totalResults = firstPage.totalResults;
+          state.lastQuery = action.payload?.query || "";
+          state.lastSearchYear = action.meta.arg?.year || "";
+          state.hasMore = firstPage.hasMore;
+          state.nextPageCursor = firstPage.nextPageCursor;
+          if (state.activeSearchKey) {
+            state.cachedSearches[state.activeSearchKey] = {
+              query: state.lastQuery,
+              year: state.lastSearchYear,
+              totalResults: state.totalResults,
+              pagesByNumber: state.pagesByNumber,
+              cachedAt: Date.now()
+            };
+          }
+        }
         state.loadingMore = false;
         state.loadMoreError = null;
       })
@@ -318,6 +392,7 @@ const pyqSlice = createSlice({
         state.searchResults = [];
         state.totalResults = 0;
         state.lastQuery = "";
+        state.lastSearchYear = "";
         state.hasMore = false;
         state.nextPageCursor = null;
         state.loadingMore = false;
@@ -329,19 +404,38 @@ const pyqSlice = createSlice({
         state.loadMoreError = null;
       })
       .addCase(loadMorePyqs.fulfilled, (state, action) => {
-        const previousLength = state.searchResults.length;
-        const mergedResults = mergeUniquePyqResults(state.searchResults, action.payload?.results || []);
-
         state.loadingMore = false;
-        state.searchResults = mergedResults;
-        state.totalResults = action.payload?.totalResults || state.totalResults;
+        const pageNumber = action.payload?.cachedPageNumber || action.payload?.pageNumber;
+        if (!pageNumber) {
+          return;
+        }
+
+        if (!action.payload?.cachedPageNumber) {
+          state.pagesByNumber[pageNumber] = {
+            results: action.payload?.results || [],
+            totalResults: action.payload?.totalResults || state.totalResults,
+            hasMore: Boolean(action.payload?.hasMore),
+            nextPageCursor: action.payload?.nextCursor || null
+          };
+        }
+
+        const page = state.pagesByNumber[pageNumber];
+        state.currentPage = pageNumber;
+        state.searchResults = page.results || [];
+        state.totalResults = page.totalResults || state.totalResults;
         state.lastQuery = action.payload?.query || state.lastQuery;
-        state.nextPageCursor = action.payload?.nextCursor || null;
-        state.hasMore = Boolean(
-          action.payload?.hasMore
-          && mergedResults.length > previousLength
-          && mergedResults.length < state.totalResults
-        );
+        state.nextPageCursor = page.nextPageCursor || null;
+        state.hasMore = Boolean(page.hasMore);
+        if (state.activeSearchKey) {
+          state.cachedSearches[state.activeSearchKey] = {
+            query: state.lastQuery,
+            year: state.lastSearchYear,
+            totalResults: state.totalResults,
+            pagesByNumber: state.pagesByNumber,
+            cachedAt: Date.now()
+          };
+        }
+        state.loadMoreError = null;
       })
       .addCase(loadMorePyqs.rejected, (state, action) => {
         state.loadingMore = false;
@@ -385,6 +479,7 @@ export const {
   setSelectedYear,
   setCourseSearch,
   setSearchQuery,
+  showPyqPage,
   togglePyqSelection,
   setSelectedPyqs,
   clearPyqSelection,

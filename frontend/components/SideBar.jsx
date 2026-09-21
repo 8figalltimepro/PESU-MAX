@@ -114,12 +114,14 @@ const Sidebar = () => {
                     }} 
                 />
                 {/* content */}
-                {currentPage === "home" && <Home />}
-                {currentPage === "courseMaterial" && <CourseMaterial />}
-                {currentPage === "knowYourFaculty" && <KnowYourFaculty />}
-                {currentPage === "attendance" && <Attendance />}
-                {currentPage === "gpaCalculator" && <GPACalculator />}
-                {currentPage === "pyq" && <PYQ />}
+                <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex" }}>
+                    {currentPage === "home" && <Home />}
+                    {currentPage === "courseMaterial" && <CourseMaterial />}
+                    {currentPage === "knowYourFaculty" && <KnowYourFaculty />}
+                    {currentPage === "attendance" && <Attendance />}
+                    {currentPage === "gpaCalculator" && <GPACalculator />}
+                    {currentPage === "pyq" && <PYQ />}
+                </Box>
 
 
             </Box>
