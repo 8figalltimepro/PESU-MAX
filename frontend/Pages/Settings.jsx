@@ -1,33 +1,42 @@
-import React from "react";
-import { useDispatch, useSelector } from "react-redux";
+import React, { useSyncExternalStore } from "react";
+import { useDispatch } from "react-redux";
 import { Box, Typography, IconButton, Button } from "@mui/material";
 import KeyboardBackspaceIcon from "@mui/icons-material/KeyboardBackspace";
 import EditIcon from "@mui/icons-material/Edit";
 import { closeSidebar, setCurrentPage } from "../redux/sidebarSlice.js";
 import theme from "../Themes/theme.jsx";
-import { canEditMenu, isMenuEditActive, startMenuEdit } from "../../src/content/menuReorder.js";
+import {
+  getMenuReorderSnapshot,
+  startMenuEdit,
+  subscribeToMenuReorder,
+} from "../../src/content/menuReorder.js";
 
 const Settings = () => {
   const dispatch = useDispatch();
-  // subscribed so the page re-reads the live edit state every time the drawer opens
-  useSelector((state) => state.sidebar.isOpen);
-  const isEditing = isMenuEditActive();
-  const canReorder = canEditMenu();
+  const { canReorder, isEditing } = useSyncExternalStore(
+    subscribeToMenuReorder,
+    getMenuReorderSnapshot,
+    getMenuReorderSnapshot
+  );
 
   const handleBack = () => {
     dispatch(setCurrentPage("home"));
   };
 
   const handleEdit = () => {
-    // the drawer gets out of the way, the menu on the page becomes draggable
-    dispatch(closeSidebar());
-    startMenuEdit();
+    if (startMenuEdit()) {
+      dispatch(closeSidebar());
+    }
   };
 
   return (
     <Box sx={{ padding: "16px" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-        <IconButton onClick={handleBack} sx={{ color: theme.colors.secondary, padding: "4px" }}>
+        <IconButton
+          onClick={handleBack}
+          aria-label="Back to home"
+          sx={{ color: theme.colors.secondary, padding: "4px" }}
+        >
           <KeyboardBackspaceIcon />
         </IconButton>
         <Typography variant="h6" sx={{ color: theme.colors.secondary, fontWeight: "bold" }}>

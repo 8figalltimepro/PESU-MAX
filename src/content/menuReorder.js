@@ -2,7 +2,6 @@ import { load, save } from "../utils/storage.js";
 import theme from "../../frontend/Themes/theme.jsx";
 
 const STORAGE_KEY = "sideMenuOrder";
-const LOG_PREFIX = "PESU-MAX:";
 const MENU_LIST_ID = "studentProfilePESUHomeMenu";
 const HOME_URL_MARKER = "/Home/";
 const STYLE_ID = "pesu-max-menu-reorder-style";
@@ -15,19 +14,46 @@ const DROP_ABOVE = `${CLASS}-drop-above`;
 const DROP_BELOW = `${CLASS}-drop-below`;
 
 let savedOrder = [];
-let naturalOrder = [];
 let editing = false;
 const wiredLists = new WeakSet();
+const naturalOrders = new WeakMap();
+const stateListeners = new Set();
+let stateSnapshot = {
+  canReorder: false,
+  isEditing: false,
+};
 
 const menuItems = (list) =>
   [...list.children].filter((el) => el.tagName === "LI" && el.id.startsWith("menuTab_"));
 
 const menuList = () => document.getElementById(MENU_LIST_ID);
 
-// Home stays pinned first, so it is never draggable nor droppable-on-top-of.
 const isHome = (item) => !!item && (item.getAttribute("data-url") || "").includes(HOME_URL_MARKER);
 
-// saved order first, then anything the user has not touched in the order the page rendered it
+function updateState() {
+  const nextSnapshot = {
+    canReorder: canEditMenu(),
+    isEditing: editing,
+  };
+  if (
+    nextSnapshot.canReorder === stateSnapshot.canReorder &&
+    nextSnapshot.isEditing === stateSnapshot.isEditing
+  ) {
+    return;
+  }
+  stateSnapshot = nextSnapshot;
+  stateListeners.forEach((listener) => listener());
+}
+
+export function subscribeToMenuReorder(listener) {
+  stateListeners.add(listener);
+  return () => stateListeners.delete(listener);
+}
+
+export function getMenuReorderSnapshot() {
+  return stateSnapshot;
+}
+
 function computeOrder(itemIds, order, homeId) {
   const present = new Set(itemIds);
   const wanted = [];
@@ -73,7 +99,6 @@ function makeDraggable(list) {
     item.draggable = editing && !home;
     item.classList.toggle(HOME_LOCKED, editing && home);
     const link = item.querySelector("a");
-    // otherwise the browser starts a native link drag instead of ours
     if (link) link.draggable = false;
   });
 }
@@ -83,13 +108,7 @@ function rememberOrder(list) {
 }
 
 function persist(order) {
-  // an orphaned content script (extension reloaded while the page stayed open)
-  // throws here instead of saving; the drag itself should still work
-  return Promise.resolve()
-    .then(() => save(STORAGE_KEY, order))
-    .catch((error) => {
-      console.warn(`${LOG_PREFIX} menu order could not be saved`, error);
-    });
+  return Promise.resolve().then(() => save(STORAGE_KEY, order));
 }
 
 function injectStyle() {
@@ -165,6 +184,24 @@ function buildEditBar() {
   document.body.appendChild(bar);
 }
 
+function setEditBarMessage(message, isError = false) {
+  const hint = document.querySelector(`#${BAR_ID} .${CLASS}-hint`);
+  if (!hint) return;
+  hint.textContent = message;
+  hint.style.color = isError ? "#d32f2f" : "#666666";
+}
+
+function setEditBarBusy(busy) {
+  const bar = document.getElementById(BAR_ID);
+  if (!bar) return;
+  const buttons = bar.querySelectorAll("button");
+  buttons.forEach((button) => {
+    button.disabled = busy;
+  });
+  const lockButton = bar.querySelector(`.${CLASS}-lock`);
+  if (lockButton) lockButton.textContent = busy ? "Saving..." : "✓  Lock order";
+}
+
 function enableReordering(list) {
   let dragged = null;
 
@@ -217,15 +254,26 @@ function enableReordering(list) {
 
 function sync() {
   const list = menuList();
-  if (!list) return;
+  if (!list) {
+    updateState();
+    return;
+  }
 
   if (!wiredLists.has(list)) {
     wiredLists.add(list);
-    // the site renders the menu in its own order, capture it before touching anything
-    naturalOrder = menuItems(list).map((item) => item.id);
+    naturalOrders.set(list, []);
     injectStyle();
     enableReordering(list);
   }
+
+  const naturalOrder = naturalOrders.get(list);
+  const knownIds = new Set(naturalOrder);
+  menuItems(list).forEach((item) => {
+    if (!knownIds.has(item.id)) {
+      naturalOrder.push(item.id);
+      knownIds.add(item.id);
+    }
+  });
 
   if (editing) {
     list.classList.add(EDITING);
@@ -233,8 +281,8 @@ function sync() {
   }
 
   makeDraggable(list);
-  // while editing the screen is the source of truth; the saved order is only applied after locking
   if (!editing) applyOrder(list);
+  updateState();
 }
 
 export function canEditMenu() {
@@ -253,7 +301,6 @@ export function startMenuEdit() {
   list.classList.add(EDITING);
   buildEditBar();
   sync();
-  console.log(`${LOG_PREFIX} menu edit mode started`);
   return true;
 }
 
@@ -269,49 +316,48 @@ function exitMenuEdit() {
 export function resetMenuOrder() {
   const list = menuList();
   if (!list) return;
-  reorderDom(list, naturalOrder);
+  reorderDom(list, naturalOrders.get(list) || []);
+  setEditBarMessage("Default menu order restored. Lock the order to save it.");
 }
 
-export function lockMenuOrder() {
+export async function lockMenuOrder() {
   const list = menuList();
-  if (list) {
-    rememberOrder(list);
-    persist(savedOrder);
+  if (!list) return false;
+
+  rememberOrder(list);
+  setEditBarBusy(true);
+  setEditBarMessage("Saving menu order...");
+  try {
+    await persist(savedOrder);
+    exitMenuEdit();
+    return true;
+  } catch {
+    setEditBarBusy(false);
+    setEditBarMessage("Could not save the order. Try again or reload the extension.", true);
+    return false;
   }
-  exitMenuEdit();
-  console.log(`${LOG_PREFIX} menu order locked`);
 }
 
 export function initMenuReorder() {
   const list = menuList();
-  // the page renders the menu in its natural order, so it is hidden for the
-  // split second it takes to read the saved order back out of storage
   const reveal = () => {
     if (list) list.style.visibility = "";
   };
   if (list) list.style.visibility = "hidden";
-  // a reloaded extension drops the pending storage callback, so never rely on
-  // the promise alone to put the menu back
   const failsafe = setTimeout(reveal, 1000);
 
-  // the menu is server rendered once per page load, but it can still be swapped
-  // out later; sync() is idempotent and cheap, so re-run it on DOM changes
   new MutationObserver(sync).observe(document.body || document.documentElement, {
     childList: true,
     subtree: true,
   });
 
-  // the picker goes up first: an extension reloaded while this page stayed open
-  // leaves this script orphaned, and chrome.storage answers nothing at all then
   sync();
   load(STORAGE_KEY)
     .then((order) => {
       savedOrder = order || [];
       sync();
     })
-    .catch((error) => {
-      console.warn(`${LOG_PREFIX} saved menu order is not readable, reordering will not persist`, error);
-    })
+    .catch(() => undefined)
     .finally(() => {
       clearTimeout(failsafe);
       reveal();

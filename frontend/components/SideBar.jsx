@@ -87,10 +87,10 @@ const Sidebar = () => {
                         </Typography>
                     </Box>
                     <Box sx={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <IconButton onClick={HandleSettings} size="large" sx={{ color: '#333' }}>
+                        <IconButton onClick={HandleSettings} aria-label="Open settings" size="large" sx={{ color: '#333' }}>
                             <SettingsIcon fontSize="large" />
                         </IconButton>
-                        <IconButton onClick={HandleClose} size="large" sx={{ color: '#333' }}>
+                        <IconButton onClick={HandleClose} aria-label="Close PESU-MAX" size="large" sx={{ color: '#333' }}>
                             <ExitToAppIcon fontSize="large" />
                         </IconButton>
                     </Box>
