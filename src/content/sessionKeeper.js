@@ -219,6 +219,12 @@ export function startSessionKeeper() {
   }
 
   setInterval(() => void settleSession(), PING_INTERVAL_MS);
+
+  // Take effect as soon as the setting is switched on or off.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[SESSION_KEEPER_KEY]) void settleSession();
+  });
+
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) void settleSession();
   });
