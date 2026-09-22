@@ -4,6 +4,7 @@ import App from '../../frontend/App.jsx';
 import { startSessionKeeper } from './sessionKeeper.js';
 import { initMenuReorder } from './menuReorder.js';
 import { initHideTopBar } from './hideTopBar.js';
+import { initSideMenuState } from './sideMenuState.js';
 
 const container = document.createElement('div');
 container.id = 'pesu-max-root';
@@ -12,5 +13,6 @@ const root = createRoot(container);
 root.render(<App />);
 startSessionKeeper();
 initHideTopBar();
+initSideMenuState();
 
 initMenuReorder();

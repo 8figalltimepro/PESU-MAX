@@ -8,6 +8,7 @@ import theme, { switchSx } from "../Themes/theme.jsx";
 import { canEditMenu, isMenuEditActive, startMenuEdit } from "../../src/content/menuReorder.js";
 import { SESSION_KEEPER_KEY, forgetStoredCredentials } from "../../src/content/sessionKeeper.js";
 import { TOP_BAR_KEY } from "../../src/content/hideTopBar.js";
+import { SIDE_MENU_STATE_KEY } from "../../src/content/sideMenuState.js";
 import { load, save } from "../../src/utils/storage.js";
 
 const rowSx = {
@@ -28,10 +29,12 @@ const Settings = () => {
   const canReorder = canEditMenu();
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [hideTopBar, setHideTopBar] = useState(false);
+  const [keepMenuState, setKeepMenuState] = useState(false);
 
   useEffect(() => {
     load(SESSION_KEEPER_KEY).then((value) => setKeepSignedIn(value === true));
     load(TOP_BAR_KEY).then((value) => setHideTopBar(value === true));
+    load(SIDE_MENU_STATE_KEY).then((value) => setKeepMenuState(value === true));
   }, []);
 
   const handleBack = () => {
@@ -55,6 +58,12 @@ const Settings = () => {
     const next = !hideTopBar;
     setHideTopBar(next);
     save(TOP_BAR_KEY, next);
+  };
+
+  const handleKeepMenuState = () => {
+    const next = !keepMenuState;
+    setKeepMenuState(next);
+    save(SIDE_MENU_STATE_KEY, next);
   };
 
   return (
@@ -125,6 +134,18 @@ const Settings = () => {
           </Typography>
         </Box>
         <Switch checked={hideTopBar} onChange={handleHideTopBar} sx={switchSx} />
+      </Box>
+
+      <Box sx={{ ...rowSx, marginTop: "12px" }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <Typography sx={{ color: theme.colors.secondary, fontWeight: 600, fontSize: "15px" }}>
+            Keep side menu state
+          </Typography>
+          <Typography variant="body2" sx={{ color: "#666666", fontSize: "12.5px" }}>
+            Puts the side menu back the way you left it, collapsed or open.
+          </Typography>
+        </Box>
+        <Switch checked={keepMenuState} onChange={handleKeepMenuState} sx={switchSx} />
       </Box>
 
       {isEditing && (
