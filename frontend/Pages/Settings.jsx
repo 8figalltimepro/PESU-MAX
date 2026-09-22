@@ -7,6 +7,7 @@ import { closeSidebar, setCurrentPage } from "../redux/sidebarSlice.js";
 import theme, { switchSx } from "../Themes/theme.jsx";
 import { canEditMenu, isMenuEditActive, startMenuEdit } from "../../src/content/menuReorder.js";
 import { SESSION_KEEPER_KEY, forgetStoredCredentials } from "../../src/content/sessionKeeper.js";
+import { TOP_BAR_KEY } from "../../src/content/hideTopBar.js";
 import { load, save } from "../../src/utils/storage.js";
 
 const rowSx = {
@@ -26,9 +27,11 @@ const Settings = () => {
   const isEditing = isMenuEditActive();
   const canReorder = canEditMenu();
   const [keepSignedIn, setKeepSignedIn] = useState(false);
+  const [hideTopBar, setHideTopBar] = useState(false);
 
   useEffect(() => {
     load(SESSION_KEEPER_KEY).then((value) => setKeepSignedIn(value === true));
+    load(TOP_BAR_KEY).then((value) => setHideTopBar(value === true));
   }, []);
 
   const handleBack = () => {
@@ -46,6 +49,12 @@ const Settings = () => {
     setKeepSignedIn(next);
     save(SESSION_KEEPER_KEY, next);
     if (!next) forgetStoredCredentials();
+  };
+
+  const handleHideTopBar = () => {
+    const next = !hideTopBar;
+    setHideTopBar(next);
+    save(TOP_BAR_KEY, next);
   };
 
   return (
@@ -104,6 +113,18 @@ const Settings = () => {
           </Typography>
         </Box>
         <Switch checked={keepSignedIn} onChange={handleKeepSignedIn} sx={switchSx} />
+      </Box>
+
+      <Box sx={{ ...rowSx, marginTop: "12px" }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <Typography sx={{ color: theme.colors.secondary, fontWeight: 600, fontSize: "15px" }}>
+            Remove top bar
+          </Typography>
+          <Typography variant="body2" sx={{ color: "#666666", fontSize: "12.5px" }}>
+            Hides the PESU Academy header bar and the space it takes.
+          </Typography>
+        </Box>
+        <Switch checked={hideTopBar} onChange={handleHideTopBar} sx={switchSx} />
       </Box>
 
       {isEditing && (
