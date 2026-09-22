@@ -1,9 +1,15 @@
 import { load, save } from "../utils/storage.js";
+import { SIDE_MENU_ORDER_KEY } from "../utils/storageKeys.js";
+import {
+  ACADEMY_HOME_URL_MARKER,
+  LOG_PREFIX,
+  MENU_ITEM_ID_PREFIX,
+  MENU_LIST_ID,
+  MENU_URL_ATTR
+} from "./academyPage.js";
 import theme from "../../frontend/Themes/theme.jsx";
 
-const STORAGE_KEY = "sideMenuOrder";
-const MENU_LIST_ID = "studentProfilePESUHomeMenu";
-const HOME_URL_MARKER = "/Home/";
+
 const STYLE_ID = "pesu-max-menu-reorder-style";
 const BAR_ID = "pesu-max-menu-edit-bar";
 const CLASS = "pesu-max-menu";
@@ -12,6 +18,8 @@ const HOME_LOCKED = `${CLASS}-home-locked`;
 const DRAGGING = `${CLASS}-dragging`;
 const DROP_ABOVE = `${CLASS}-drop-above`;
 const DROP_BELOW = `${CLASS}-drop-below`;
+// the menu stays hidden until the saved order is read back; never longer than this
+const MENU_REVEAL_FAILSAFE_MS = 1000;
 
 let savedOrder = [];
 let editing = false;
@@ -24,11 +32,12 @@ let stateSnapshot = {
 };
 
 const menuItems = (list) =>
-  [...list.children].filter((el) => el.tagName === "LI" && el.id.startsWith("menuTab_"));
+  [...list.children].filter((el) => el.tagName === "LI" && el.id.startsWith(MENU_ITEM_ID_PREFIX));
 
 const menuList = () => document.getElementById(MENU_LIST_ID);
 
-const isHome = (item) => !!item && (item.getAttribute("data-url") || "").includes(HOME_URL_MARKER);
+// Home stays pinned first, so it is never draggable nor droppable-on-top-of.
+const isHome = (item) => !!item && (item.getAttribute(MENU_URL_ATTR) || "").includes(ACADEMY_HOME_URL_MARKER);
 
 function updateState() {
   const nextSnapshot = {
@@ -108,7 +117,13 @@ function rememberOrder(list) {
 }
 
 function persist(order) {
-  return Promise.resolve().then(() => save(STORAGE_KEY, order));
+  // an orphaned content script (extension reloaded while the page stayed open)
+  // throws here instead of saving; the drag itself should still work
+  return Promise.resolve()
+    .then(() => save(SIDE_MENU_ORDER_KEY, order))
+    .catch((error) => {
+      console.warn(`${LOG_PREFIX} menu order could not be saved`, error);
+    });
 }
 
 function injectStyle() {
@@ -121,7 +136,7 @@ function injectStyle() {
       outline-offset: -2px;
       border-radius: 8px;
     }
-    #${MENU_LIST_ID}.${EDITING} > li[id^="menuTab_"] { cursor: grab; }
+    #${MENU_LIST_ID}.${EDITING} > li[id^="${MENU_ITEM_ID_PREFIX}"] { cursor: grab; }
     #${MENU_LIST_ID} > li.${HOME_LOCKED} { cursor: not-allowed; opacity: 0.65; }
     #${MENU_LIST_ID} > li.${DRAGGING} { cursor: grabbing; opacity: 0.5; }
     #${MENU_LIST_ID} > li.${DROP_ABOVE} { box-shadow: inset 0 3px 0 0 ${theme.colors.secondary}; }
@@ -344,7 +359,9 @@ export function initMenuReorder() {
     if (list) list.style.visibility = "";
   };
   if (list) list.style.visibility = "hidden";
-  const failsafe = setTimeout(reveal, 1000);
+  // a reloaded extension drops the pending storage callback, so never rely on
+  // the promise alone to put the menu back
+  const failsafe = setTimeout(reveal, MENU_REVEAL_FAILSAFE_MS);
 
   new MutationObserver(sync).observe(document.body || document.documentElement, {
     childList: true,
@@ -352,7 +369,7 @@ export function initMenuReorder() {
   });
 
   sync();
-  load(STORAGE_KEY)
+  load(SIDE_MENU_ORDER_KEY)
     .then((order) => {
       savedOrder = order || [];
       sync();
