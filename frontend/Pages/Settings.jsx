@@ -1,15 +1,27 @@
-import React, { useSyncExternalStore } from "react";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
 import { useDispatch } from "react-redux";
-import { Box, Typography, IconButton, Button } from "@mui/material";
+import { Box, Typography, IconButton, Button, Switch } from "@mui/material";
 import KeyboardBackspaceIcon from "@mui/icons-material/KeyboardBackspace";
 import EditIcon from "@mui/icons-material/Edit";
 import { closeSidebar, setCurrentPage } from "../redux/sidebarSlice.js";
-import theme from "../Themes/theme.jsx";
+import theme, { switchSx } from "../Themes/theme.jsx";
 import {
   getMenuReorderSnapshot,
   startMenuEdit,
   subscribeToMenuReorder,
 } from "../../src/content/menuReorder.js";
+import { SESSION_KEEPER_KEY, forgetStoredCredentials } from "../../src/content/sessionKeeper.js";
+import { load, save } from "../../src/utils/storage.js";
+
+const rowSx = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  padding: "14px",
+  border: "1.5px solid rgba(35, 58, 118, 0.2)",
+  borderRadius: "12px",
+};
 
 const Settings = () => {
   const dispatch = useDispatch();
@@ -34,6 +46,13 @@ const Settings = () => {
     }
   };
 
+  const handleKeepSignedIn = () => {
+    const next = !keepSignedIn;
+    setKeepSignedIn(next);
+    save(SESSION_KEEPER_KEY, next);
+    if (!next) forgetStoredCredentials();
+  };
+
   return (
     <Box sx={{ padding: "16px" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
@@ -49,17 +68,7 @@ const Settings = () => {
         </Typography>
       </Box>
 
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "12px",
-          padding: "14px",
-          border: "1.5px solid rgba(35, 58, 118, 0.2)",
-          borderRadius: "12px",
-        }}
-      >
+      <Box sx={rowSx}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           <Typography sx={{ color: theme.colors.secondary, fontWeight: 600, fontSize: "15px" }}>
             Re-order side menu
@@ -92,6 +101,18 @@ const Settings = () => {
         >
           {isEditing ? "Editing..." : "Edit"}
         </Button>
+      </Box>
+
+      <Box sx={{ ...rowSx, marginTop: "12px" }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <Typography sx={{ color: theme.colors.secondary, fontWeight: 600, fontSize: "15px" }}>
+            Keep me signed in
+          </Typography>
+          <Typography variant="body2" sx={{ color: "#666666", fontSize: "12.5px" }}>
+            Signs you back in quietly when PESU Academy logs you out.
+          </Typography>
+        </Box>
+        <Switch checked={keepSignedIn} onChange={handleKeepSignedIn} sx={switchSx} />
       </Box>
 
       {isEditing && (
