@@ -1,10 +1,13 @@
-import React, { useEffect, useState, useSyncExternalStore } from "react";
+import React, { useSyncExternalStore } from "react";
 import { useDispatch } from "react-redux";
-import { Box, Typography, IconButton, Button, Switch } from "@mui/material";
+import { Box, Typography, IconButton, Button, Stack } from "@mui/material";
 import KeyboardBackspaceIcon from "@mui/icons-material/KeyboardBackspace";
 import EditIcon from "@mui/icons-material/Edit";
 import { closeSidebar, setCurrentPage } from "../redux/sidebarSlice.js";
-import theme, { switchSx } from "../Themes/theme.jsx";
+import theme from "../Themes/theme.jsx";
+import SettingsRow from "../components/Settings/SettingsRow.jsx";
+import SettingsToggleRow from "../components/Settings/SettingsToggleRow.jsx";
+import { settingsActionButtonSx, settingsHintSx, settingsWarningSx } from "../styles/styles.js";
 import {
   getMenuReorderSnapshot,
   startMenuEdit,
@@ -13,17 +16,6 @@ import {
 import { SESSION_KEEPER_KEY, forgetStoredCredentials } from "../../src/content/sessionKeeper.js";
 import { TOP_BAR_KEY } from "../../src/content/hideTopBar.js";
 import { SIDE_MENU_STATE_KEY } from "../../src/content/sideMenuState.js";
-import { load, save } from "../../src/utils/storage.js";
-
-const rowSx = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "12px",
-  padding: "14px",
-  border: "1.5px solid rgba(35, 58, 118, 0.2)",
-  borderRadius: "12px",
-};
 
 const Settings = () => {
   const dispatch = useDispatch();
@@ -32,15 +24,6 @@ const Settings = () => {
     getMenuReorderSnapshot,
     getMenuReorderSnapshot
   );
-  const [keepSignedIn, setKeepSignedIn] = useState(false);
-  const [hideTopBar, setHideTopBar] = useState(false);
-  const [keepMenuState, setKeepMenuState] = useState(false);
-
-  useEffect(() => {
-    load(SESSION_KEEPER_KEY).then((value) => setKeepSignedIn(value === true));
-    load(TOP_BAR_KEY).then((value) => setHideTopBar(value === true));
-    load(SIDE_MENU_STATE_KEY).then((value) => setKeepMenuState(value === true));
-  }, []);
 
   const handleBack = () => {
     dispatch(setCurrentPage("home"));
@@ -50,25 +33,6 @@ const Settings = () => {
     if (startMenuEdit()) {
       dispatch(closeSidebar());
     }
-  };
-
-  const handleKeepSignedIn = () => {
-    const next = !keepSignedIn;
-    setKeepSignedIn(next);
-    save(SESSION_KEEPER_KEY, next);
-    if (!next) forgetStoredCredentials();
-  };
-
-  const handleHideTopBar = () => {
-    const next = !hideTopBar;
-    setHideTopBar(next);
-    save(TOP_BAR_KEY, next);
-  };
-
-  const handleKeepMenuState = () => {
-    const next = !keepMenuState;
-    setKeepMenuState(next);
-    save(SIDE_MENU_STATE_KEY, next);
   };
 
   return (
@@ -86,88 +50,52 @@ const Settings = () => {
         </Typography>
       </Box>
 
-      <Box sx={rowSx}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <Typography sx={{ color: theme.colors.secondary, fontWeight: 600, fontSize: "15px" }}>
-            Re-order side menu
-          </Typography>
-          <Typography variant="body2" sx={{ color: "#666666", fontSize: "12.5px" }}>
-            Drag the PESU Academy menu into the order you want and lock it in. Home always stays first.
-          </Typography>
-        </Box>
-        <Button
-          onClick={handleEdit}
-          disabled={!canReorder || isEditing}
-          startIcon={<EditIcon sx={{ fontSize: "18px" }} />}
-          sx={{
-            backgroundColor: theme.colors.primary,
-            color: "#ffffff",
-            textTransform: "none",
-            fontSize: "13px",
-            fontWeight: 500,
-            padding: "8px 14px",
-            minWidth: "auto",
-            borderRadius: "8px",
-            whiteSpace: "nowrap",
-            "&:hover": { backgroundColor: theme.colors.primaryHover },
-            "&.Mui-disabled": {
-              backgroundColor: theme.colors.primary,
-              color: "#ffffff",
-              opacity: 0.55,
-            },
-          }}
+      <Stack spacing="12px">
+        <SettingsRow
+          title="Re-order side menu"
+          description="Drag the PESU Academy menu into the order you want and lock it in. Home always stays first."
         >
-          {isEditing ? "Editing..." : "Edit"}
-        </Button>
-      </Box>
+          <Button
+            onClick={handleEdit}
+            disabled={!canReorder || isEditing}
+            startIcon={<EditIcon sx={{ fontSize: "18px" }} />}
+            sx={settingsActionButtonSx}
+          >
+            {isEditing ? "Editing..." : "Edit"}
+          </Button>
+        </SettingsRow>
 
-      <Box sx={{ ...rowSx, marginTop: "12px" }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <Typography sx={{ color: theme.colors.secondary, fontWeight: 600, fontSize: "15px" }}>
-            Keep me signed in
-          </Typography>
-          <Typography variant="body2" sx={{ color: "#666666", fontSize: "12.5px" }}>
-            Signs you back in quietly when PESU Academy logs you out.
-          </Typography>
-        </Box>
-        <Switch checked={keepSignedIn} onChange={handleKeepSignedIn} sx={switchSx} />
-      </Box>
+        <SettingsToggleRow
+          storageKey={SESSION_KEEPER_KEY}
+          title="Keep me signed in"
+          description="Signs you back in quietly when PESU Academy logs you out."
+          onDisable={forgetStoredCredentials}
+        />
 
-      <Box sx={{ ...rowSx, marginTop: "12px" }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <Typography sx={{ color: theme.colors.secondary, fontWeight: 600, fontSize: "15px" }}>
-            Remove top bar
-          </Typography>
-          <Typography variant="body2" sx={{ color: "#666666", fontSize: "12.5px" }}>
-            Hides the PESU Academy header bar and the space it takes.
-          </Typography>
-        </Box>
-        <Switch checked={hideTopBar} onChange={handleHideTopBar} sx={switchSx} />
-      </Box>
+        <SettingsToggleRow
+          storageKey={TOP_BAR_KEY}
+          title="Remove top bar"
+          description="Hides the PESU Academy header bar and the space it takes."
+        />
 
-      <Box sx={{ ...rowSx, marginTop: "12px" }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-          <Typography sx={{ color: theme.colors.secondary, fontWeight: 600, fontSize: "15px" }}>
-            Keep side menu state
-          </Typography>
-          <Typography variant="body2" sx={{ color: "#666666", fontSize: "12.5px" }}>
-            Puts the side menu back the way you left it, collapsed or open.
-          </Typography>
-        </Box>
-        <Switch checked={keepMenuState} onChange={handleKeepMenuState} sx={switchSx} />
-      </Box>
+        <SettingsToggleRow
+          storageKey={SIDE_MENU_STATE_KEY}
+          title="Keep side menu state"
+          description="Puts the side menu back the way you left it, collapsed or open."
+        />
 
-      {isEditing && (
-        <Typography variant="body2" sx={{ color: theme.colors.secondary, marginTop: "12px" }}>
-          Edit mode is active on the page. Use Reset or the tick to lock the order in.
-        </Typography>
-      )}
+        {isEditing && (
+          <Typography variant="body2" sx={settingsHintSx}>
+            Edit mode is active on the page. Use Reset or the tick to lock the order in.
+          </Typography>
+        )}
 
-      {!canReorder && (
-        <Typography variant="body2" sx={{ color: "#d32f2f", marginTop: "12px" }}>
-          Open your PESU Academy profile page to re-order the menu.
-        </Typography>
-      )}
+        {!canReorder && (
+          <Typography variant="body2" sx={settingsWarningSx}>
+            Open your PESU Academy profile page to re-order the menu.
+          </Typography>
+        )}
+      </Stack>
     </Box>
   );
 };
