@@ -66,6 +66,9 @@ All users data is stored locally in browser. NO proxy servers or External DB con
 |:----:|:-------:|
 | ![Faculty Menu](Images/faculty-menu.png) | ![Faculty Profile](Images/faculty-profile.png) |
 
+### Previous Year Question Papers
+![Previous Year Question Papers](Images/pyq.png)
+
 ## DEMO VIDEO
 
 https://github.com/user-attachments/assets/f326dab6-3d37-4be4-a399-8b66b4d2739f
