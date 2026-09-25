@@ -1,5 +1,4 @@
-// Every key this extension stores, in one place: chrome.storage.local is the settings contract shared with the UI,
-// sessionStorage holds per-tab re-login guards.
+// Keys this extension stores: settings in chrome.storage.local, re-login guards in sessionStorage.
 export const SESSION_KEEPER_KEY = "sessionKeeperEnabled";
 export const TOP_BAR_KEY = "hideTopBarEnabled";
 export const SIDE_MENU_STATE_KEY = "sideMenuStateEnabled";

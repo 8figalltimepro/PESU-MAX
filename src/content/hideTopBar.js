@@ -3,7 +3,7 @@ import { TOP_BAR_KEY } from "../utils/storageKeys.js";
 
 const STYLE_ID = "pesu-max-hide-top-bar-style";
 
-// Top-bar + extra space it takes
+// Top bar and the space it takes.
 const CSS = `
   #pge_menu { display: none !important; }
   body > .content-wrapper { padding-top: 0 !important; }
@@ -24,11 +24,12 @@ function apply(enabled) {
   document.head.appendChild(style);
 }
 
-// Default: Off
+// Off by default.
 export async function initHideTopBar() {
   apply((await load(TOP_BAR_KEY)) === true);
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes[TOP_BAR_KEY]) apply(changes[TOP_BAR_KEY].newValue === true);
+    if (area !== "local" || !changes[TOP_BAR_KEY]) return;
+    apply(changes[TOP_BAR_KEY].newValue === true);
   });
 }

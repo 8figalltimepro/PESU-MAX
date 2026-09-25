@@ -34,8 +34,9 @@ const menuItems = (list) =>
 
 const menuList = () => document.getElementById(MENU_LIST_ID);
 
-// Home stays pinned first, so it is never draggable nor droppable-on-top-of.
-const isHome = (item) => !!item && (item.getAttribute(MENU_URL_ATTR) || "").includes(ACADEMY_HOME_URL_MARKER);
+// Home stays pinned first.
+const isHome = (item) =>
+  !!item && (item.getAttribute(MENU_URL_ATTR) || "").includes(ACADEMY_HOME_URL_MARKER);
 
 function updateState() {
   const nextSnapshot = {
@@ -115,8 +116,7 @@ function rememberOrder(list) {
 }
 
 function persist(order) {
-  // an orphaned content script (extension reloaded while the page stayed open)
-  // throws instead of saving; lockMenuOrder reports that rejection to the user
+  // Orphaned content script throws instead of saving; lockMenuOrder reports it.
   return Promise.resolve().then(() => save(SIDE_MENU_ORDER_KEY, order));
 }
 
@@ -353,8 +353,7 @@ export function initMenuReorder() {
     if (list) list.style.visibility = "";
   };
   if (list) list.style.visibility = "hidden";
-  // a reloaded extension drops the pending storage callback, so never rely on
-  // the promise alone to put the menu back
+  // A reloaded extension drops the pending storage callback.
   const failsafe = setTimeout(reveal, MENU_REVEAL_FAILSAFE_MS);
 
   new MutationObserver(sync).observe(document.body || document.documentElement, {

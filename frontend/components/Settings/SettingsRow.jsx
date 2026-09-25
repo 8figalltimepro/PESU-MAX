@@ -7,7 +7,7 @@ import {
   settingsRowDescriptionSx,
 } from "../../styles/styles.js";
 
-// One settings card: title + description on the left, any control as children on the right.
+// Settings card: text left, control right.
 const SettingsRow = ({ title, description, children }) => (
   <Box sx={settingsRowSx}>
     <Box sx={settingsRowTextSx}>

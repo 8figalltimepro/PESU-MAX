@@ -1,5 +1,4 @@
-// PESU Academy page contract: what the content scripts query, and the tag their console lines carry.
-// No imports: literals and DOM predicates only.
+// PESU Academy page contract
 export const MENU_LIST_ID = "studentProfilePESUHomeMenu";
 export const MENU_ITEM_ID_PREFIX = "menuTab_";
 export const MENU_URL_ATTR = "data-url";

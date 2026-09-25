@@ -219,7 +219,7 @@ export const errorAlertSx = {
   }
 };
 
-// Settings styles
+// Settings switch
 export const switchSx = {
   width: 46,
   height: 26,
@@ -267,7 +267,7 @@ export const settingsRowSx = {
   borderRadius: '12px',
 };
 
-// Title + description column inside a settings row
+// Row text column
 export const settingsRowTextSx = {
   display: 'flex',
   flexDirection: 'column',
@@ -285,7 +285,7 @@ export const settingsRowDescriptionSx = {
   fontSize: '12.5px',
 };
 
-// Primary action button inside a settings row
+// Row action button
 export const settingsActionButtonSx = {
   backgroundColor: theme.colors.primary,
   color: '#ffffff',
@@ -304,7 +304,7 @@ export const settingsActionButtonSx = {
   },
 };
 
-// Text below the row list
+// Row hint and warning
 export const settingsHintSx = {
   color: theme.colors.secondary,
 };
