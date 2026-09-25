@@ -28,7 +28,7 @@ export async function fetchPesu(url, options) {
   return response;
 }
 
-export const resetCsrfToken = () => { cachedCsrfToken = null; cachedCsrfTokenFetchedAt = 0; };
+export const resetCsrfToken = () => { cachedCsrfToken = null; cachedCsrfFetchedAt = 0; };
 
 export const CONTENT_TYPE_IDS = {
   slides: 2,
