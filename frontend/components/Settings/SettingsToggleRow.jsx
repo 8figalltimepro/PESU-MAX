@@ -4,10 +4,9 @@ import SettingsRow from "./SettingsRow.jsx";
 import { switchSx } from "../../styles/styles.js";
 import { load, save } from "../../../src/utils/storage.js";
 
-// A boolean setting in chrome.storage.local. Unset or wrong-typed values read as false.
+// Toggle Row
 const SettingsToggleRow = ({ storageKey, title, description, onDisable }) => {
   const [checked, setChecked] = useState(false);
-  // Waits for the stored value before accepting clicks.
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -32,7 +31,6 @@ const SettingsToggleRow = ({ storageKey, title, description, onDisable }) => {
     setChecked(next);
 
     try {
-      // An orphaned content script throws instead of saving.
       await save(storageKey, next);
     } catch (error) {
       console.warn(`[PESU-MAX] ${storageKey} could not be saved:`, error);
@@ -40,7 +38,6 @@ const SettingsToggleRow = ({ storageKey, title, description, onDisable }) => {
       return;
     }
 
-    // Switching off also forgets what the setting stored.
     if (!next && onDisable) {
       await Promise.resolve(onDisable()).catch(() => {});
     }

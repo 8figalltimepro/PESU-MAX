@@ -116,7 +116,6 @@ function rememberOrder(list) {
 }
 
 function persist(order) {
-  // Orphaned content script throws instead of saving; lockMenuOrder reports it.
   return Promise.resolve().then(() => save(SIDE_MENU_ORDER_KEY, order));
 }
 
@@ -353,7 +352,7 @@ export function initMenuReorder() {
     if (list) list.style.visibility = "";
   };
   if (list) list.style.visibility = "hidden";
-  
+
   const failsafe = setTimeout(reveal, MENU_REVEAL_FAILSAFE_MS);
 
   new MutationObserver(sync).observe(document.body || document.documentElement, {

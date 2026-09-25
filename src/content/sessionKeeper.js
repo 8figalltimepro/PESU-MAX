@@ -70,13 +70,12 @@ async function attemptReLogin() {
   } else {
     console.warn(
       `${LOG_PREFIX} academy re-login rejected (${rejections}/${MAX_RELOGIN_REJECTIONS}); ` +
-        "credentials kept"
+      "credentials kept"
     );
   }
   return "failed";
 }
 
-// Normal page: keep the session alive, repair it in place when it dies.
 async function settleAppPage() {
   if ((await probeSession()) !== false) {
     // User Logged in
@@ -93,7 +92,7 @@ async function settleLoginPage() {
   // captcha error
   if (hasCaptchaGate()) {
     console.warn(
-      `${LOG_PREFIX} academy login is captcha-gated right now; waiting for a manual login`
+      `${LOG_PREFIX} academy login is captcha-gated right now; waiting for a manual login. This is a temp fix used by PESUAcademy to stop DDOS attacks`
     );
     sessionStorage.setItem(RELOGIN_GUARD_KEY, String(Date.now() + RELOGIN_BACKOFF_MS));
     return;
