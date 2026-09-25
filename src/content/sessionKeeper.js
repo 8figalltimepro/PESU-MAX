@@ -1,9 +1,20 @@
-// Policy only: when to probe the academy, when to re-login, when to give up.
-// The HTTP lives in helpers/academyAuth.js, the stored login in helpers/academyCredentials.js, the page in academyPage.js.
 import { load } from "../utils/storage.js";
-import { RELOGIN_GUARD_KEY, REJECT_COUNT_KEY, SESSION_KEEPER_KEY } from "../utils/storageKeys.js";
-import { ACADEMY_BASE_URL, ACADEMY_PROFILE_PATH, loginToAcademy, probeSession } from "../helpers/academyAuth.js";
-import { captureCredentials, forgetStoredCredentials, readStoredCredentials } from "../helpers/academyCredentials.js";
+import {
+  RELOGIN_GUARD_KEY,
+  REJECT_COUNT_KEY,
+  SESSION_KEEPER_KEY
+} from "../utils/storageKeys.js";
+import {
+  ACADEMY_BASE_URL,
+  ACADEMY_PROFILE_PATH,
+  loginToAcademy,
+  probeSession
+} from "../helpers/academyAuth.js";
+import {
+  captureCredentials,
+  forgetStoredCredentials,
+  readStoredCredentials
+} from "../helpers/academyCredentials.js";
 import { resetCsrfToken } from "../helpers/pesuAPI.js";
 import {
   ACADEMY_APP_PATH_PREFIX,
@@ -13,7 +24,7 @@ import {
   loginFormEngaged
 } from "./academyPage.js";
 
-// Check Interval: 4 mins
+// Check interval: 4 mins
 const SESSION_PING_INTERVAL_MS = 4 * 60 * 1000;
 const RELOGIN_MIN_GAP_MS = SESSION_PING_INTERVAL_MS;
 const RELOGIN_BACKOFF_MS = 15 * 60 * 1000;
@@ -47,35 +58,44 @@ async function attemptReLogin() {
     return "ok";
   }
 
-  // Keep the credentials on a rejection; the refusal may be temporary.
   const rejections = Number(sessionStorage.getItem(REJECT_COUNT_KEY) || 0) + 1;
   sessionStorage.setItem(REJECT_COUNT_KEY, String(rejections));
   sessionStorage.setItem(RELOGIN_GUARD_KEY, String(Date.now() + RELOGIN_BACKOFF_MS));
 
   if (rejections >= MAX_RELOGIN_REJECTIONS) {
     await forgetStoredCredentials();
-    console.warn(`${LOG_PREFIX} stored academy credentials were rejected repeatedly; cleared`);
+    console.warn(
+      `${LOG_PREFIX} stored academy credentials were rejected repeatedly; cleared`
+    );
   } else {
-    console.warn(`${LOG_PREFIX} academy re-login rejected (${rejections}/${MAX_RELOGIN_REJECTIONS}); credentials kept`);
+    console.warn(
+      `${LOG_PREFIX} academy re-login rejected (${rejections}/${MAX_RELOGIN_REJECTIONS}); ` +
+        "credentials kept"
+    );
   }
   return "failed";
 }
 
-// A normal page: keep the session alive and repair it in place when it dies.
-// ponytail: a login form in another tab can still be invalidated by these probes.
+// Normal page: keep the session alive, repair it in place when it dies.
 async function settleAppPage() {
-  if ((await probeSession()) !== false) return;
+  if ((await probeSession()) !== false) {
+    // Logged in: keep the login the site stored for the next silent re-login.
+    await captureCredentials();
+    return;
+  }
 
   await attemptReLogin();
 }
 
-// A login page: never probe here, it invalidates the token in this form.
+// Login page: never probe here, it invalidates the token in this form.
 async function settleLoginPage() {
   if (loginFormEngaged()) return;
 
-  // A captcha means a human has to log in, so wait.
+  // A captcha needs a human, so wait.
   if (hasCaptchaGate()) {
-    console.warn(`${LOG_PREFIX} academy login is captcha-gated right now; waiting for a manual login`);
+    console.warn(
+      `${LOG_PREFIX} academy login is captcha-gated right now; waiting for a manual login`
+    );
     sessionStorage.setItem(RELOGIN_GUARD_KEY, String(Date.now() + RELOGIN_BACKOFF_MS));
     return;
   }
