@@ -353,7 +353,7 @@ export function initMenuReorder() {
     if (list) list.style.visibility = "";
   };
   if (list) list.style.visibility = "hidden";
-  // A reloaded extension drops the pending storage callback.
+  
   const failsafe = setTimeout(reveal, MENU_REVEAL_FAILSAFE_MS);
 
   new MutationObserver(sync).observe(document.body || document.documentElement, {

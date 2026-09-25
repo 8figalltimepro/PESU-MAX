@@ -1,4 +1,3 @@
-// PESU Academy page contract
 export const MENU_LIST_ID = "studentProfilePESUHomeMenu";
 export const MENU_ITEM_ID_PREFIX = "menuTab_";
 export const MENU_URL_ATTR = "data-url";

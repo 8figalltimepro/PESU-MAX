@@ -79,7 +79,7 @@ async function attemptReLogin() {
 // Normal page: keep the session alive, repair it in place when it dies.
 async function settleAppPage() {
   if ((await probeSession()) !== false) {
-    // Logged in: keep the login the site stored for the next silent re-login.
+    // User Logged in
     await captureCredentials();
     return;
   }
@@ -87,11 +87,10 @@ async function settleAppPage() {
   await attemptReLogin();
 }
 
-// Login page: never probe here, it invalidates the token in this form.
 async function settleLoginPage() {
   if (loginFormEngaged()) return;
 
-  // A captcha needs a human, so wait.
+  // captcha error
   if (hasCaptchaGate()) {
     console.warn(
       `${LOG_PREFIX} academy login is captcha-gated right now; waiting for a manual login`
@@ -107,12 +106,11 @@ async function settleLoginPage() {
     return;
   }
 
-  // The attempt staled this form, so reload once for a usable one.
   if (result === "failed") location.reload();
 }
 
 async function settleSession() {
-  // Off until it is switched on in Settings.
+  // Default: OFF
   if ((await load(SESSION_KEEPER_KEY)) !== true) return;
 
   if (hasLoginForm()) {
@@ -132,7 +130,6 @@ export function startSessionKeeper() {
 
   setInterval(() => void settleSession(), SESSION_PING_INTERVAL_MS);
 
-  // Take effect as soon as the setting is switched on or off.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes[SESSION_KEEPER_KEY]) void settleSession();
   });

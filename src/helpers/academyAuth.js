@@ -1,9 +1,8 @@
-// PESU Academy requests only: no page DOM, no storage.
 export const ACADEMY_BASE_URL = "https://www.pesuacademy.com/Academy";
 export const ACADEMY_PROFILE_PATH = "/s/studentProfilePESU";
 const ACADEMY_LOGIN_PATH = "/j_spring_security_check";
 
-// Alive while the profile page renders instead of redirecting to login.
+
 export async function probeSession() {
   const controller = new AbortController();
 
