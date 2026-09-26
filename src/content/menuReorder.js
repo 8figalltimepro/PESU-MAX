@@ -6,13 +6,14 @@ import {
   MENU_LIST_ID,
   MENU_URL_ATTR
 } from "./academyPage.js";
+import { TOGGLE_ROW_ID } from "./hideTopBar.js";
 import theme from "../../frontend/Themes/theme.jsx";
 
 const STYLE_ID = "pesu-max-menu-reorder-style";
 const BAR_ID = "pesu-max-menu-edit-bar";
 const CLASS = "pesu-max-menu";
 const EDITING = `${CLASS}-editing`;
-const HOME_LOCKED = `${CLASS}-home-locked`;
+const LOCKED = `${CLASS}-locked`;
 const DRAGGING = `${CLASS}-dragging`;
 const DROP_ABOVE = `${CLASS}-drop-above`;
 const DROP_BELOW = `${CLASS}-drop-below`;
@@ -37,6 +38,9 @@ const menuList = () => document.getElementById(MENU_LIST_ID);
 // Home stays pinned first.
 const isHome = (item) =>
   !!item && (item.getAttribute(MENU_URL_ATTR) || "").includes(ACADEMY_HOME_URL_MARKER);
+
+
+const toggleRow = () => document.getElementById(TOGGLE_ROW_ID);
 
 function updateState() {
   const nextSnapshot = {
@@ -105,10 +109,16 @@ function makeDraggable(list) {
   menuItems(list).forEach((item) => {
     const home = isHome(item);
     item.draggable = editing && !home;
-    item.classList.toggle(HOME_LOCKED, editing && home);
+    item.classList.toggle(LOCKED, editing && home);
     const link = item.querySelector("a");
     if (link) link.draggable = false;
   });
+
+  const toggle = toggleRow();
+  if (toggle) {
+    toggle.draggable = false;
+    toggle.classList.toggle(LOCKED, editing);
+  }
 }
 
 function rememberOrder(list) {
@@ -130,7 +140,7 @@ function injectStyle() {
       border-radius: 8px;
     }
     #${MENU_LIST_ID}.${EDITING} > li[id^="${MENU_ITEM_ID_PREFIX}"] { cursor: grab; }
-    #${MENU_LIST_ID} > li.${HOME_LOCKED} { cursor: not-allowed; opacity: 0.65; }
+    #${MENU_LIST_ID} > li.${LOCKED} { cursor: not-allowed; opacity: 0.65; }
     #${MENU_LIST_ID} > li.${DRAGGING} { cursor: grabbing; opacity: 0.5; }
     #${MENU_LIST_ID} > li.${DROP_ABOVE} { box-shadow: inset 0 3px 0 0 ${theme.colors.secondary}; }
     #${MENU_LIST_ID} > li.${DROP_BELOW} { box-shadow: inset 0 -3px 0 0 ${theme.colors.secondary}; }
@@ -220,7 +230,7 @@ function enableReordering(list) {
     item.classList.add(above ? DROP_ABOVE : DROP_BELOW);
   };
   const targetItem = (event) => {
-    const item = event.target.closest("li");
+    const item = event.target.closest(`li[id^="${MENU_ITEM_ID_PREFIX}"]`);
     return item && list.contains(item) ? item : null;
   };
 

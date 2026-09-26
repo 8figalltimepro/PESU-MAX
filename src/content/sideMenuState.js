@@ -52,6 +52,14 @@ function saveCollapsed() {
     .catch(() => {});
 }
 
+export function toggleSideMenuByUser() {
+  const el = menu();
+  if (!el) return;
+
+  userToggledAt = Date.now();
+  setCollapsed(state() !== SIDE_MENU_HIDDEN);
+}
+
 // Put our state back after the site resets the menu
 function observeMenu(el) {
   if (!el || el === observedMenu) return;
