@@ -12,7 +12,7 @@ import {
   getMenuReorderSnapshot,
   startMenuEdit,
   subscribeToMenuReorder,
-} from "../../src/content/menuReorder.js";
+} from "../../src/content/menuReorder";
 import {
   SESSION_KEEPER_KEY,
   SIDE_MENU_STATE_KEY,

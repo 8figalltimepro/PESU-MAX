@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot} from 'react-dom/client';
 import App from '../../frontend/App.jsx';
-import { initMenuReorder } from './menuReorder.js';
+import { initMenuReorder } from './menuReorder';
 import { startSessionKeeper } from './sessionKeeper.js';
 import { initHideTopBar } from './hideTopBar.js';
 import { initSideMenuState } from './sideMenuState.js';

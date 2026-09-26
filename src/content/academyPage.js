@@ -17,6 +17,13 @@ const LOGIN_USERNAME_SELECTOR = 'input[name="j_username"]';
 const LOGIN_PASSWORD_SELECTOR = 'input[name="j_password"]';
 const LOGIN_CAPTCHA_SELECTOR = "#captchaInput, #captchaImg";
 
+export const menuItems = (list) =>
+  [...list.children].filter((el) => el.tagName === "LI" && el.id.startsWith(MENU_ITEM_ID_PREFIX));
+
+// Home stays pinned first.
+export const isHome = (item) =>
+  !!item && (item.getAttribute(MENU_URL_ATTR) || "").includes(ACADEMY_HOME_URL_MARKER);
+
 const passwordField = () => document.querySelector(LOGIN_PASSWORD_SELECTOR);
 
 export function hasLoginForm() {
