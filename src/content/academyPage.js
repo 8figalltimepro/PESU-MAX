@@ -20,9 +20,16 @@ const LOGIN_CAPTCHA_SELECTOR = "#captchaInput, #captchaImg";
 export const menuItems = (list) =>
   [...list.children].filter((el) => el.tagName === "LI" && el.id.startsWith(MENU_ITEM_ID_PREFIX));
 
-// Home stays pinned first.
 export const isHome = (item) =>
   !!item && (item.getAttribute(MENU_URL_ATTR) || "").includes(ACADEMY_HOME_URL_MARKER);
+
+const MATERIAL_TABLE_SELECTOR = "#CourseContentId table";
+
+export const materialTables = () =>
+  [...document.querySelectorAll(MATERIAL_TABLE_SELECTOR)].filter((table) => {
+    const head = table.tHead && table.tHead.rows[0];
+    return Boolean(head) && [...head.cells].some((cell) => /^\d+$/.test(cell.id));
+  });
 
 const passwordField = () => document.querySelector(LOGIN_PASSWORD_SELECTOR);
 

@@ -1,4 +1,4 @@
-import React, { useSyncExternalStore } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import { useDispatch } from "react-redux";
 import { Box, Typography, IconButton, Button, Stack } from "@mui/material";
 import KeyboardBackspaceIcon from "@mui/icons-material/KeyboardBackspace";
@@ -7,6 +7,7 @@ import { closeSidebar, setCurrentPage } from "../redux/sidebarSlice.js";
 import theme from "../Themes/theme.jsx";
 import SettingsRow from "../components/Settings/SettingsRow.jsx";
 import SettingsToggleRow from "../components/Settings/SettingsToggleRow.jsx";
+import MaterialColumnsDialog from "../components/CourseMaterial/MaterialColumnsDialog.jsx";
 import { settingsActionButtonSx, settingsHintSx, settingsWarningSx } from "../styles/styles.js";
 import {
   getMenuReorderSnapshot,
@@ -22,6 +23,7 @@ import { forgetStoredCredentials } from "../../src/helpers/academyCredentials.js
 
 const Settings = () => {
   const dispatch = useDispatch();
+  const [materialColumnsOpen, setMaterialColumnsOpen] = useState(false);
   const { canReorder, isEditing } = useSyncExternalStore(
     subscribeToMenuReorder,
     getMenuReorderSnapshot,
@@ -54,12 +56,19 @@ const Settings = () => {
       </Box>
 
       <Stack spacing="12px">
+        <SettingsToggleRow
+          storageKey={SESSION_KEEPER_KEY}
+          title="Keep me signed in"
+          description={
+            "Automatically signs you in when PESU Academy logs you out. " +
+            "Silently, in the background"
+          }
+          onDisable={forgetStoredCredentials}
+        />
+
         <SettingsRow
           title="Re-order side menu"
-          description={
-            "Drag the PESU Academy side-menu into the order you want. " +
-            "Home always stays first."
-          }
+          description="Drag the PESU Academy side-menu into the order you want."
         >
           <Button
             onClick={handleEdit}
@@ -71,15 +80,18 @@ const Settings = () => {
           </Button>
         </SettingsRow>
 
-        <SettingsToggleRow
-          storageKey={SESSION_KEEPER_KEY}
-          title="Keep me signed in"
-          description={
-            "Automatically signs you in when PESU Academy logs you out. " +
-            "Silently, in the background"
-          }
-          onDisable={forgetStoredCredentials}
-        />
+        <SettingsRow
+          title="Re-order material types"
+          description="Move or hide the material columns of the Course Units table."
+        >
+          <Button
+            onClick={() => setMaterialColumnsOpen(true)}
+            startIcon={<EditIcon sx={{ fontSize: "18px" }} />}
+            sx={settingsActionButtonSx}
+          >
+            Edit
+          </Button>
+        </SettingsRow>
 
         <SettingsToggleRow
           storageKey={TOP_BAR_KEY}
@@ -105,6 +117,11 @@ const Settings = () => {
           </Typography>
         )}
       </Stack>
+
+      <MaterialColumnsDialog
+        open={materialColumnsOpen}
+        onClose={() => setMaterialColumnsOpen(false)}
+      />
     </Box>
   );
 };

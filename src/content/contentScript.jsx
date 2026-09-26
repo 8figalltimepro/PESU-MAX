@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot} from 'react-dom/client';
 import App from '../../frontend/App.jsx';
 import { initMenuReorder } from './menuReorder';
+import { initMaterialColumns } from './materialColumns';
 import { startSessionKeeper } from './sessionKeeper.js';
 import { initHideTopBar } from './hideTopBar.js';
 import { initSideMenuState } from './sideMenuState.js';
@@ -16,3 +17,4 @@ initHideTopBar();
 initSideMenuState();
 
 initMenuReorder();
+initMaterialColumns();
