@@ -12,6 +12,9 @@ import {
 } from "./academyPage.js";
 
 
+export const SIDE_MENU_ATTR = "data-pesu-max-menu-collapsed";
+export const SIDE_MENU_MIRROR_KEY = "pesuMaxSideMenuCollapsed";
+
 const MENU_WIDTHS = {
   collapsed: { menu: "4%", content: "96%" },
   expanded: { menu: "15%", content: "85%" }
@@ -46,7 +49,15 @@ function setCollapsed(collapsed) {
   el.setAttribute(SIDE_MENU_STATE_ATTR, collapsed ? SIDE_MENU_HIDDEN : SIDE_MENU_SHOWN);
 }
 
+function writeMirror() {
+  try {
+    localStorage.setItem(SIDE_MENU_MIRROR_KEY, enabled && remembered ? "1" : "0");
+  } catch (error) {
+  }
+}
+
 function saveCollapsed() {
+  writeMirror();
   Promise.resolve()
     .then(() => save(SIDE_MENU_COLLAPSED_KEY, remembered))
     .catch(() => {});
@@ -88,6 +99,7 @@ function observeMenu(el) {
 export async function initSideMenuState() {
   enabled = (await load(SIDE_MENU_STATE_KEY)) === true;
   remembered = (await load(SIDE_MENU_COLLAPSED_KEY)) === true;
+  writeMirror();
 
   document.addEventListener(
     "click",
@@ -109,6 +121,7 @@ export async function initSideMenuState() {
 
     observeMenu(el);
     if (enabled) setCollapsed(remembered);
+    document.documentElement.removeAttribute(SIDE_MENU_ATTR);
   };
   wire();
   new MutationObserver(wire).observe(document.body || document.documentElement, {

@@ -7,28 +7,21 @@ import {
 } from "./academyPage.js";
 import { toggleSideMenuByUser } from "./sideMenuState.js";
 
-const STYLE_ID = "pesu-max-hide-top-bar-style";
 export const TOGGLE_ROW_ID = "pesu-max-menu-toggle";
 
-// Top bar and the space it takes.
-const CSS = `
-  #pge_menu { display: none !important; }
-  body > .content-wrapper { padding-top: 0 !important; }
-`;
+export const TOP_BAR_ATTR = "data-pesu-max-hide-top-bar";
+export const TOP_BAR_MIRROR_KEY = "pesuMaxHideTopBar";
 
-function applyStyle(enabled) {
-  const existing = document.getElementById(STYLE_ID);
+function applyHidden(enabled) {
+  if (enabled) document.documentElement.setAttribute(TOP_BAR_ATTR, "");
+  else document.documentElement.removeAttribute(TOP_BAR_ATTR);
+}
 
-  if (!enabled) {
-    if (existing) existing.remove();
-    return;
+function writeMirror(enabled) {
+  try {
+    localStorage.setItem(TOP_BAR_MIRROR_KEY, enabled ? "1" : "0");
+  } catch (error) {
   }
-
-  if (existing) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
-  style.textContent = CSS;
-  document.head.appendChild(style);
 }
 
 // Add an entry in the side-menu. ONLY when the TOP_BAR_KEY is set.
@@ -56,7 +49,6 @@ function applyRow(enabled) {
   link.addEventListener("click", toggleSideMenuByUser);
   row.appendChild(link);
 
-  // Match the menu state the row lands in.
   const label = link.querySelector(".menu-name");
   const menu = document.querySelector(SIDE_MENU_SELECTOR);
   const collapsed = menu && menu.getAttribute(SIDE_MENU_STATE_ATTR) === SIDE_MENU_HIDDEN;
@@ -66,8 +58,9 @@ function applyRow(enabled) {
 }
 
 function apply(enabled) {
-  applyStyle(enabled);
+  applyHidden(enabled);
   applyRow(enabled);
+  writeMirror(enabled);
 }
 
 // Off by default.
