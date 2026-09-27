@@ -23,6 +23,17 @@ export const menuItems = (list) =>
 export const isHome = (item) =>
   !!item && (item.getAttribute(MENU_URL_ATTR) || "").includes(ACADEMY_HOME_URL_MARKER);
 
+export const menuItemFor = (marker) => {
+  const list = document.getElementById(MENU_LIST_ID);
+  if (!list) return null;
+
+  const item = menuItems(list).find((entry) =>
+    (entry.getAttribute(MENU_URL_ATTR) || "").includes(marker)
+  );
+
+  return item || null;
+};
+
 const MATERIAL_TABLE_SELECTOR = "#CourseContentId table";
 
 export const materialTables = () =>

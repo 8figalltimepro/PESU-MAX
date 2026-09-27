@@ -261,8 +261,8 @@ export const settingsRowSx = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  gap: '12px',
-  padding: '14px',
+  gap: '10px',
+  padding: '10px 12px',
   border: `1.5px solid ${theme.colors.secondaryBorder}`,
   borderRadius: '12px',
 };
@@ -271,18 +271,19 @@ export const settingsRowSx = {
 export const settingsRowTextSx = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '4px',
+  gap: '2px',
 };
 
 export const settingsRowTitleSx = {
   color: theme.colors.secondary,
   fontWeight: 600,
-  fontSize: '15px',
+  fontSize: '14px',
 };
 
 export const settingsRowDescriptionSx = {
   color: theme.colors.textMuted,
-  fontSize: '12.5px',
+  fontSize: '12px',
+  lineHeight: 1.35,
 };
 
 // Row action button
@@ -290,9 +291,9 @@ export const settingsActionButtonSx = {
   backgroundColor: theme.colors.primary,
   color: '#ffffff',
   textTransform: 'none',
-  fontSize: '13px',
+  fontSize: '12.5px',
   fontWeight: 500,
-  padding: '8px 14px',
+  padding: '6px 12px',
   minWidth: 'auto',
   borderRadius: '8px',
   whiteSpace: 'nowrap',
