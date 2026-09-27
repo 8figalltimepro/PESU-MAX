@@ -117,7 +117,7 @@ export async function initSideMenuState() {
 
   const wire = () => {
     const el = menu();
-    if (!el || el === observedMenu) return;
+    if (!el || el === observedMenu || !document.querySelector(SIDE_MENU_CONTENT_SELECTOR)) return;
 
     observeMenu(el);
     if (enabled) setCollapsed(remembered);

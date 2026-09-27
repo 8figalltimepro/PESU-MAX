@@ -1,6 +1,7 @@
 const theme = {
   colors: {
     primary: '#F5821F',
+    onSolid: '#ffffff',
     secondary: '#233A76',
     primaryHover: '#D66F1A',
     secondaryHover: '#1D2F5F',

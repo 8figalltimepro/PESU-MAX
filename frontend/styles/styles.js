@@ -313,3 +313,34 @@ export const settingsHintSx = {
 export const settingsWarningSx = {
   color: theme.colors.error,
 };
+
+const popupButtonSx = {
+  color: theme.colors.onSolid,
+  borderRadius: '8px',
+  padding: '6px 14px',
+  fontWeight: 500,
+  '&.Mui-focusVisible': {
+    outline: `2px solid ${theme.colors.secondary}`,
+    outlineOffset: '2px',
+  },
+};
+
+export const popupPrimaryButtonSx = {
+  ...primaryButtonSx,
+  ...popupButtonSx,
+  '&.Mui-disabled': {
+    backgroundColor: theme.colors.primary,
+    color: theme.colors.onSolid,
+    opacity: 0.55,
+  },
+};
+
+export const popupSecondaryButtonSx = {
+  ...secondaryButtonSx,
+  ...popupButtonSx,
+  '&.Mui-disabled': {
+    backgroundColor: theme.colors.secondary,
+    color: theme.colors.onSolid,
+    opacity: 0.55,
+  },
+};

@@ -53,8 +53,8 @@ export function injectStyle() {
       padding: 8px 14px;
       border-radius: 8px;
       border: 1.5px solid ${theme.colors.secondary};
-      background: #ffffff;
-      color: ${theme.colors.secondary};
+      background: ${theme.colors.secondary};
+      color: ${theme.colors.onSolid};
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
@@ -62,10 +62,18 @@ export function injectStyle() {
     #${BAR_ID} button.${CLASS}-lock {
       border-color: ${theme.colors.primary};
       background: ${theme.colors.primary};
-      color: #ffffff;
+      color: ${theme.colors.onSolid};
     }
-    #${BAR_ID} button.${CLASS}-lock:hover { background: ${theme.colors.primaryHover}; }
-    #${BAR_ID} button.${CLASS}-reset:hover { background: ${theme.colors.secondaryLight}; }
+    #${BAR_ID} button.${CLASS}-lock:hover:not(:disabled) { background: ${theme.colors.primaryHover}; }
+    #${BAR_ID} button.${CLASS}-reset:hover:not(:disabled) { background: ${theme.colors.secondaryHover}; }
+    #${BAR_ID} button:focus-visible {
+      outline: 2px solid ${theme.colors.secondary};
+      outline-offset: 2px;
+    }
+    #${BAR_ID} button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
   `;
   document.head.appendChild(style);
 }

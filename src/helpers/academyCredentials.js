@@ -1,5 +1,5 @@
 import { load, remove, save } from "../utils/storage.js";
-import { ACADEMY_CREDENTIAL_KEY } from "../utils/storageKeys.js";
+import { ACADEMY_CREDENTIAL_KEY, SESSION_KEEPER_KEY } from "../utils/storageKeys.js";
 
 const SITE_USERNAME_STORAGE_KEY = "clientusername";
 const SITE_PASSWORD_STORAGE_KEY = "clientpassword";
@@ -30,7 +30,7 @@ export async function forgetStoredCredentials() {
 }
 
 // username and pass is taken from the place where the site itself writes it.
-export async function captureCredentials() {
+export async function captureCredentials(isCurrent = () => true) {
   const username = localStorage.getItem(SITE_USERNAME_STORAGE_KEY);
   const password = localStorage.getItem(SITE_PASSWORD_STORAGE_KEY);
   if (!username || !password) return;
@@ -38,5 +38,9 @@ export async function captureCredentials() {
   const stored = await readStoredCredentials();
   if (stored && stored.username === username && stored.password === password) return;
 
+  if (!isCurrent() || (await load(SESSION_KEEPER_KEY)) !== true) return;
   await storeCredentials(username, password);
+  if (!isCurrent() || (await load(SESSION_KEEPER_KEY)) !== true) {
+    await forgetStoredCredentials();
+  }
 }

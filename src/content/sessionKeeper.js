@@ -6,16 +6,13 @@ import {
 } from "../utils/storageKeys.js";
 import {
   ACADEMY_BASE_URL,
-  ACADEMY_PROFILE_PATH,
-  loginToAcademy,
-  probeSession
+  ACADEMY_PROFILE_PATH
 } from "../helpers/academyAuth.js";
 import {
   captureCredentials,
-  forgetStoredCredentials,
-  readStoredCredentials
+  forgetStoredCredentials
 } from "../helpers/academyCredentials.js";
-import { resetCsrfToken } from "../helpers/pesuAPI.js";
+import { loginToAcademy, probeSession } from "../services/academySession.js";
 import {
   ACADEMY_APP_PATH_PREFIX,
   LOG_PREFIX,
@@ -32,29 +29,25 @@ const MAX_RELOGIN_REJECTIONS = 3;
 const LOGIN_PAGE_GRACE_MS = 1000;
 
 // Returns "ok", "failed" or "skipped".
-async function attemptReLogin() {
+async function attemptReLogin(isCurrent) {
+  if (!isCurrent()) return "skipped";
   const blockedUntil = Number(sessionStorage.getItem(RELOGIN_GUARD_KEY) || 0);
   if (Date.now() < blockedUntil) return "skipped";
   sessionStorage.setItem(RELOGIN_GUARD_KEY, String(Date.now() + RELOGIN_MIN_GAP_MS));
 
-  const credentials = await readStoredCredentials();
-  if (!credentials) {
-    console.log(`${LOG_PREFIX} no stored academy credentials; silent re-login skipped`);
-    return "skipped";
-  }
-
   let loggedIn = false;
   try {
-    loggedIn = await loginToAcademy(credentials);
+    loggedIn = await loginToAcademy();
   } catch (error) {
     console.warn(`${LOG_PREFIX} academy re-login failed:`, error.message);
     return "failed";
   }
 
+  if (!isCurrent() || loggedIn === null) return "skipped";
+
   if (loggedIn) {
     sessionStorage.removeItem(REJECT_COUNT_KEY);
-    resetCsrfToken();
-    await captureCredentials();
+    await captureCredentials(isCurrent);
     return "ok";
   }
 
@@ -76,17 +69,19 @@ async function attemptReLogin() {
   return "failed";
 }
 
-async function settleAppPage() {
-  if ((await probeSession()) !== false) {
+async function settleAppPage(isCurrent) {
+  const alive = await probeSession();
+  if (!isCurrent() || alive === null) return;
+  if (alive) {
     // User Logged in
-    await captureCredentials();
+    await captureCredentials(isCurrent);
     return;
   }
 
-  await attemptReLogin();
+  await attemptReLogin(isCurrent);
 }
 
-async function settleLoginPage() {
+async function settleLoginPage(isCurrent) {
   if (loginFormEngaged()) return;
 
   // captcha error
@@ -98,7 +93,9 @@ async function settleLoginPage() {
     return;
   }
 
-  const result = await attemptReLogin();
+  const result = await attemptReLogin(isCurrent);
+
+  if (!isCurrent()) return;
 
   if (result === "ok") {
     location.replace(`${ACADEMY_BASE_URL}${ACADEMY_PROFILE_PATH}`);
@@ -108,32 +105,39 @@ async function settleLoginPage() {
   if (result === "failed") location.reload();
 }
 
+let generation = 0;
+
 async function settleSession() {
+  const currentGeneration = generation;
+  const isCurrent = () => generation === currentGeneration;
   // Default: OFF
   if ((await load(SESSION_KEEPER_KEY)) !== true) return;
 
   if (hasLoginForm()) {
-    await settleLoginPage();
+    await settleLoginPage(isCurrent);
     return;
   }
 
-  await settleAppPage();
+  await settleAppPage(isCurrent);
 }
 
 export function startSessionKeeper() {
   if (hasLoginForm()) {
-    setTimeout(() => void settleSession(), LOGIN_PAGE_GRACE_MS);
+    setTimeout(() => void settleSession().catch(() => {}), LOGIN_PAGE_GRACE_MS);
   } else if (location.pathname.startsWith(ACADEMY_APP_PATH_PREFIX)) {
-    void settleSession();
+    void settleSession().catch(() => {});
   }
 
-  setInterval(() => void settleSession(), SESSION_PING_INTERVAL_MS);
+  setInterval(() => void settleSession().catch(() => {}), SESSION_PING_INTERVAL_MS);
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes[SESSION_KEEPER_KEY]) void settleSession();
+    if (area === "local" && changes[SESSION_KEEPER_KEY]) {
+      generation += 1;
+      void settleSession().catch(() => {});
+    }
   });
 
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) void settleSession();
+    if (!document.hidden) void settleSession().catch(() => {});
   });
 }

@@ -1,58 +1,57 @@
-import React, { useEffect, useState } from "react";
-import { Switch } from "@mui/material";
+import React, { useState } from "react";
+import { Alert, Button, Stack, Switch } from "@mui/material";
 import SettingsRow from "./SettingsRow.jsx";
-import { switchSx } from "../../styles/styles.js";
-import { load, save } from "../../../src/utils/storage.js";
+import useStoredSetting from "./useStoredSetting.js";
+import { switchSx, popupSecondaryButtonSx } from "../../styles/styles.js";
 
-// Toggle Row
 const SettingsToggleRow = ({ storageKey, title, description, onDisable }) => {
-  const [checked, setChecked] = useState(false);
-  const [ready, setReady] = useState(false);
+  const setting = useStoredSetting(storageKey, false, title);
+  const [clearing, setClearing] = useState(false);
+  const [cleanupError, setCleanupError] = useState("");
 
-  useEffect(() => {
-    let stale = false;
-
-    load(storageKey)
-      .then((value) => {
-        if (!stale) setChecked(value === true);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!stale) setReady(true);
-      });
-
-    return () => {
-      stale = true;
-    };
-  }, [storageKey]);
-
-  const handleChange = async () => {
-    const next = !checked;
-    setChecked(next);
-
+  const clearCredentials = async () => {
+    setClearing(true);
     try {
-      await save(storageKey, next);
+      await onDisable();
+      setCleanupError("");
     } catch (error) {
-      console.warn(`[PESU-MAX] ${storageKey} could not be saved:`, error);
-      setChecked(!next);
-      return;
+      setCleanupError("The setting is off, but saved credentials could not be removed. Please retry.");
+    } finally {
+      setClearing(false);
     }
+  };
 
-    if (!next && onDisable) {
-      await Promise.resolve(onDisable()).catch(() => {});
+  const handleChange = async (event) => {
+    const next = event.target.checked;
+    if (await setting.update(next)) {
+      if (!next && onDisable) await clearCredentials();
     }
   };
 
   return (
-    <SettingsRow title={title} description={description}>
-      <Switch
-        checked={checked}
-        onChange={handleChange}
-        disabled={!ready}
-        sx={switchSx}
-        slotProps={{ input: { "aria-label": title } }}
-      />
-    </SettingsRow>
+    <Stack spacing={1}>
+      <SettingsRow title={title} description={description}>
+        <Switch
+          checked={setting.value === true}
+          onChange={handleChange}
+          disabled={!setting.ready || setting.saving || clearing || Boolean(cleanupError)}
+          sx={switchSx}
+          slotProps={{ input: { "aria-label": title } }}
+        />
+      </SettingsRow>
+      {(cleanupError || setting.error) && (
+        <Alert severity="error" action={
+          (cleanupError || !setting.ready) && (
+            <Button variant="contained" disableElevation sx={popupSecondaryButtonSx} size="small" disabled={clearing}
+              onClick={cleanupError ? clearCredentials : setting.retry}>
+              Retry
+            </Button>
+          )
+        }>
+          {cleanupError || setting.error}
+        </Alert>
+      )}
+    </Stack>
   );
 };
 

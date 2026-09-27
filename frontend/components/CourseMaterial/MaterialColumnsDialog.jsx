@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
+  CircularProgress,
   Box,
   Button,
   Dialog,
@@ -24,7 +26,7 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import ChecklistIcon from "@mui/icons-material/Checklist";
 import LinkIcon from "@mui/icons-material/Link";
 import theme from "../../Themes/theme.jsx";
-import { dialogPaperSx, dialogTitleSx, primaryButtonSx, switchSx } from "../../styles/styles.js";
+import { dialogPaperSx, dialogTitleSx, popupPrimaryButtonSx, popupSecondaryButtonSx, switchSx } from "../../styles/styles.js";
 import {
   defaultMaterialColumns,
   getMaterialColumnsDraft,
@@ -48,19 +50,37 @@ const COLUMN_ICONS = {
 const MaterialColumnsDialog = ({ open, onClose }) => {
   const [columns, setColumns] = useState([]);
   const [dragged, setDragged] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) {
+      setLoading(true);
+      return undefined;
+    }
 
     let stale = false;
-    getMaterialColumnsDraft().then((draft) => {
-      if (!stale) setColumns(draft);
-    });
+    setLoading(true);
+    setColumns([]);
+    setDragged(null);
+    setError("");
+    getMaterialColumnsDraft()
+      .then((draft) => {
+        if (!stale) setColumns(draft);
+      })
+      .catch(() => {
+        if (!stale) setError("Could not load material preferences. Please retry.");
+      })
+      .finally(() => {
+        if (!stale) setLoading(false);
+      });
 
     return () => {
       stale = true;
     };
-  }, [open]);
+  }, [open, reload]);
 
   const moveBy = (id, delta) => {
     setColumns((current) => {
@@ -75,15 +95,16 @@ const MaterialColumnsDialog = ({ open, onClose }) => {
     });
   };
 
-  const moveBefore = (id, targetId) => {
+  const moveRelative = (id, targetId, after) => {
     setColumns((current) => {
       const from = current.findIndex((column) => column.id === id);
       const to = current.findIndex((column) => column.id === targetId);
-      if (from < 0 || to < 1 || from === to) return current;
+      if (from < 1 || to < 1 || from === to) return current;
 
       const next = [...current];
       const [moved] = next.splice(from, 1);
-      next.splice(to > from ? to - 1 : to, 0, moved);
+      const target = next.findIndex((column) => column.id === targetId);
+      next.splice(target + (after ? 1 : 0), 0, moved);
       return next;
     });
   };
@@ -95,14 +116,23 @@ const MaterialColumnsDialog = ({ open, onClose }) => {
   };
 
   const handleSave = async () => {
-    await saveMaterialColumns(columns);
-    onClose();
+    if (loading || saving || !columns.length) return;
+    setSaving(true);
+    setError("");
+    try {
+      await saveMaterialColumns(columns);
+      onClose();
+    } catch (error) {
+      setError("Could not save material preferences. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={saving ? undefined : onClose}
       maxWidth="xs"
       fullWidth
       PaperProps={{ sx: dialogPaperSx }}
@@ -111,6 +141,14 @@ const MaterialColumnsDialog = ({ open, onClose }) => {
         Re-order material types
       </DialogTitle>
       <DialogContent>
+        {loading && <CircularProgress size={24} aria-label="Loading material preferences" />}
+        {error && (
+          <Alert severity="error" action={!columns.length && !loading && (
+            <Button variant="contained" disableElevation sx={popupSecondaryButtonSx} size="small" onClick={() => setReload((count) => count + 1)}>
+              Retry
+            </Button>
+          )}>{error}</Alert>
+        )}
         <Typography
           variant="body2"
           sx={{ color: theme.colors.textMuted, fontSize: "12px", lineHeight: 1.6 }}
@@ -125,18 +163,21 @@ const MaterialColumnsDialog = ({ open, onClose }) => {
             return (
               <Box
                 key={column.id}
-                draggable={!column.pinned}
+                draggable={!column.pinned && !saving}
                 onDragStart={(event) => {
                   event.dataTransfer.effectAllowed = "move";
                   event.dataTransfer.setData("text/plain", column.id);
                   setDragged(column.id);
                 }}
-                onDragEnter={() => {
-                  if (dragged && !column.pinned) moveBefore(dragged, column.id);
-                }}
                 onDragOver={(event) => event.preventDefault()}
                 onDragEnd={() => setDragged(null)}
-                onDrop={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  if (!dragged || column.pinned || saving) return;
+                  const box = event.currentTarget.getBoundingClientRect();
+                  moveRelative(dragged, column.id, event.clientY >= box.top + box.height / 2);
+                  setDragged(null);
+                }}
                 sx={{
                   display: "flex",
                   alignItems: "center",
@@ -152,7 +193,7 @@ const MaterialColumnsDialog = ({ open, onClose }) => {
               >
                 <IconButton
                   size="small"
-                  disabled={column.pinned}
+                  disabled={column.pinned || saving}
                   aria-label={`Move ${column.label}`}
                   onKeyDown={(event) => {
                     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
@@ -184,6 +225,7 @@ const MaterialColumnsDialog = ({ open, onClose }) => {
                   ) : (
                     <Switch
                       size="small"
+                      disabled={saving}
                       checked={!column.hidden}
                       onChange={() => toggle(column.id)}
                       sx={switchSx}
@@ -203,17 +245,20 @@ const MaterialColumnsDialog = ({ open, onClose }) => {
         </Box>
       </DialogContent>
       <DialogActions sx={{ padding: "8px 24px 16px", gap: 1 }}>
-        <Button onClick={onClose} sx={{ color: theme.colors.textMuted, textTransform: "none" }}>
+        <Button variant="contained" disableElevation onClick={onClose} disabled={saving} sx={popupSecondaryButtonSx}>
           Cancel
         </Button>
         <Button
+          variant="contained"
+          disableElevation
+          disabled={loading || saving || !columns.length}
           onClick={() => setColumns(defaultMaterialColumns())}
-          sx={{ color: theme.colors.secondary, textTransform: "none" }}
+          sx={popupSecondaryButtonSx}
         >
           Reset
         </Button>
-        <Button onClick={handleSave} sx={{ ...primaryButtonSx, color: "#ffffff" }}>
-          Save
+        <Button variant="contained" disableElevation onClick={handleSave} disabled={loading || saving || !columns.length} sx={popupPrimaryButtonSx}>
+          {saving ? "Saving..." : "Save"}
         </Button>
       </DialogActions>
     </Dialog>

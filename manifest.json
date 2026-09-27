@@ -20,12 +20,6 @@
   "content_scripts": [
     {
       "matches": ["https://www.pesuacademy.com/*"],
-      "js": ["content/startPageMain.js"],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": ["https://www.pesuacademy.com/*"],
       "js": ["content/startPage.js"],
       "run_at": "document_start"
     },
@@ -53,7 +47,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/Pes_logo_square_ui.png"],
+      "resources": ["icons/Pes_logo_square_ui.png", "content/startPageMain.js"],
       "matches": ["https://www.pesuacademy.com/*"]
     }
   ]
