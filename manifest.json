@@ -20,6 +20,23 @@
   "content_scripts": [
     {
       "matches": ["https://www.pesuacademy.com/*"],
+      "js": ["content/startPage.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.pesuacademy.com/*"],
+      "css": ["content/hideTopBar.css"],
+      "js": ["content/hideTopBarStart.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.pesuacademy.com/*"],
+      "css": ["content/sideMenuState.css"],
+      "js": ["content/sideMenuStateStart.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.pesuacademy.com/*"],
       "js": ["content/content.js"]
     }
   ],
@@ -30,7 +47,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/Pes_logo_square_ui.png"],
+      "resources": ["icons/Pes_logo_square_ui.png", "content/startPageMain.js"],
       "matches": ["https://www.pesuacademy.com/*"]
     }
   ]
