@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { IconButton } from "@mui/material";
+import { Box, IconButton } from "@mui/material";
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { setCurrentPage } from "../../redux/sidebarSlice.js";
 import { fetchResourceNotifications, selectUnreadCount } from "../../redux/notificationsSlice.js";
@@ -18,14 +18,31 @@ const ResourceNotificationsButton = () => {
   }, [dispatch]);
 
   return (
-    <IconButton
-      onClick={() => dispatch(setCurrentPage("notifications"))}
-      aria-label={hasUnread ? `Open notifications, ${unreadCount} unread` : "Open notifications"}
-      size="large"
-      sx={{ color: hasUnread ? theme.colors.primary : theme.colors.secondary }}
-    >
-      <NotificationsIcon fontSize="large" />
-    </IconButton>
+    <Box sx={{ position: "relative" }}>
+      <IconButton
+        onClick={() => dispatch(setCurrentPage("notifications"))}
+        aria-label={hasUnread ? `Open notifications, ${unreadCount} unread` : "Open notifications"}
+        size="large"
+        sx={{ color: theme.colors.secondary }}
+      >
+        <NotificationsIcon fontSize="large" />
+      </IconButton>
+      {hasUnread && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: "4px",
+            right: "4px",
+            width: "10px",
+            height: "10px",
+            borderRadius: "50%",
+            backgroundColor: theme.colors.primary,
+            border: "2px solid #fff",
+            pointerEvents: "none"
+          }}
+        />
+      )}
+    </Box>
   );
 };
 

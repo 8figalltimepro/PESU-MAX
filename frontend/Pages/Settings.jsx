@@ -73,7 +73,7 @@ const Settings = () => {
         <SettingsSelectRow
           storageKey={START_PAGE_KEY}
           title="Set the start page"
-          description="Opens this page instead of Home"
+          description="Opens this page instead of Home after login"
           options={START_PAGE_OPTIONS}
         />
 
