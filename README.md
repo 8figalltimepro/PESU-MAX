@@ -66,8 +66,10 @@ All users data is stored locally in browser. NO proxy servers or External DB con
 |:----:|:-------:|
 | ![Faculty Menu](Images/faculty-menu.png) | ![Faculty Profile](Images/faculty-profile.png) |
 
-### Previous Year Question Papers
-![Previous Year Question Papers](Images/pyq.png)
+### Previous Year Question Papers and Settings
+| Previous Year Question Papers | Settings |
+|:-----------------------------:|:--------:|
+| <img src="Images/pyq.png" alt="Previous Year Question Papers" height="560"> | <img src="Images/settings.png" alt="Settings" height="560"> |
 
 ## DEMO VIDEO
 
