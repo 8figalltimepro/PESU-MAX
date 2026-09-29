@@ -67,9 +67,6 @@ async function appendNotifications(notifications) {
   await save(RESOURCE_NOTIFICATIONS_KEY, mergeResourceNotifications(existing || [], notifications));
 }
 
-// Records the Slides/Notes/Assignments/QB/QA files of every class in the current semester and
-// notifies about files that were not there on the previous check. Progress is saved per subject,
-// so an interrupted check resumes without refetching the subjects it already finished.
 async function runResourceCheck() {
   const semester = findCurrentSemester(parseSemesters(await getAllSemesters()));
   if (!semester) {

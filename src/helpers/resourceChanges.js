@@ -93,10 +93,6 @@ function groupNotifications(results, { subject, semester, detectedAt }) {
   return Array.from(notifications.values());
 }
 
-// Builds one subject's resource tree:
-// { code, name, units: { [unitId]: { name, classes: { [classId]: { name, classNo, counts, files } } } } }
-// File lists are fetched only when a count changed or the list is not known yet. New files are
-// reported only for subjects recorded by an earlier check, so the first check is a silent baseline.
 export async function buildSubjectResources({ subject, units, previousSubject, semester, fetchFiles, detectedAt = Date.now() }) {
   const resourceUnits = {};
   const tasks = [];
