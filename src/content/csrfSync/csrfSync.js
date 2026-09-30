@@ -2,7 +2,6 @@ import { CSRF_INPUT_SELECTOR, CSRF_META_SELECTOR } from "../academyPage.js";
 
 let mainWorldInjected = false;
 
-// Academy copies the token into jQuery's global headers at load, which only the page's own world can update.
 function injectMainWorld() {
   if (mainWorldInjected) return;
   mainWorldInjected = true;

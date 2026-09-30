@@ -25,7 +25,6 @@ export async function probeSession() {
   }
 }
 
-// The CSRF token belongs to the session, so it changes on every login, logout or expiry.
 export async function readSessionToken() {
   try {
     const response = await fetch(`${ACADEMY_BASE_URL}${ACADEMY_PROFILE_PATH}`, {

@@ -1,7 +1,6 @@
 import { CSRF_META_SELECTOR } from "../academyPage.js";
 
 const INSTALLED_ATTR = "data-pesu-max-csrf-sync";
-// Must match the key Academy passes to $.ajaxSetup so the stale header is replaced, not duplicated.
 const CSRF_HEADER = "X-CSRF-Token";
 
 function applyToken(meta) {

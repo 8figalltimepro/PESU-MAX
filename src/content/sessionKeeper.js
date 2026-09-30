@@ -82,7 +82,6 @@ async function settleAppPage(isCurrent) {
 
   if ((await attemptReLogin(isCurrent)) !== "ok") return;
 
-  // The re-login issued a new token that this already-loaded page does not have.
   const restored = await readSessionToken();
   if (isCurrent() && restored?.alive) syncPageCsrfToken(restored.csrfToken);
 }
