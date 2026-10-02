@@ -30,7 +30,7 @@ Use the `dist/` folder to load the extension.
 
 ## NOTE
 
-Not an official package from PES University, made for only downloading resources quickly from PESU Academy.
+Not an official package from PES University, built to make using PESU Academy smoother.
 
 All users data is stored locally in browser. NO proxy servers or External DB connected.
 
