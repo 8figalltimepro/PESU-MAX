@@ -1,4 +1,5 @@
 import { createBulkDownloadZip } from './downloadHelper.js';
+import { blobToDataUrl } from './blobEncoding.js';
 import { CONTENT_TYPE_IDS } from './pesuAPI.js';
 
 const DEFAULT_CONTENT_TYPES = [CONTENT_TYPE_IDS.slides];
@@ -39,14 +40,8 @@ export async function handleBulkDownload(selectedItems, contentTypes, mergeOptio
       mergeSlides
     });
     
-    // Convert blob to data URL 
-    const arrayBuffer = await result.blob.arrayBuffer();
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer)
-        .reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
-    const dataUrl = `data:application/zip;base64,${base64}`;
-    
+    const dataUrl = await blobToDataUrl(result.blob, 'application/zip');
+
     chrome.downloads.download({
       url: dataUrl,
       filename: `PESU_Materials_${Date.now()}.zip`,
