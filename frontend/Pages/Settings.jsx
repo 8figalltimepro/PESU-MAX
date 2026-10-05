@@ -44,7 +44,7 @@ const Settings = () => {
   };
 
   return (
-    <Box sx={{ padding: "12px" }}>
+    <Box sx={{ padding: "12px", boxSizing: "border-box", maxHeight: "100vh", overflowY: "auto" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "10px" }}>
         <IconButton
           onClick={handleBack}
