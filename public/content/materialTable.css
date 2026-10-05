@@ -48,6 +48,11 @@ html[data-pesu-max-material-table] #CourseContentId .pesu-max-material-icon {
   align-items: center;
 }
 
+html[data-pesu-max-material-table] #CourseContentId .pesu-max-material-count {
+  min-width: 2ch;
+  text-align: center;
+}
+
 html[data-pesu-max-material-table] #CourseContentId .pesu-max-material-icon::before {
   content: none;
 }

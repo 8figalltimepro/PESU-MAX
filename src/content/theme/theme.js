@@ -1,5 +1,6 @@
 import { load } from "../../utils/storage.js";
 import { THEME_FONT_KEY, THEME_PALETTE_KEY } from "../../utils/storageKeys.js";
+import { ACADEMY_APP_PATH_PREFIX } from "../academyPage.js";
 import { applyTheme, themeValues } from "./themeApply.js";
 import { writeThemeMirror } from "./themeMirror.js";
 
@@ -16,6 +17,8 @@ const apply = (values) => {
 
 // Off by default
 export async function initTheme() {
+  if (!location.pathname.startsWith(ACADEMY_APP_PATH_PREFIX)) return;
+
   apply(await loadValues());
 
   chrome.storage.onChanged.addListener((changes, area) => {

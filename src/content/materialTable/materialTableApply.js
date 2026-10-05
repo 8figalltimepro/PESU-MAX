@@ -29,6 +29,8 @@ const LEGEND_ATTR = "data-pesu-max-material-legend";
 const LEGEND_TEXT_ATTR = "data-pesu-max-material-legend-text";
 const ICON_ATTR = "data-pesu-max-material-icon";
 const ICON_CLASS = "pesu-max-material-icon";
+const COUNT_CLASS = "pesu-max-material-count";
+const COUNT_TEXT_ATTR = "data-pesu-max-material-count-text";
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function buildIcon(name) {
@@ -77,10 +79,37 @@ function clearIcon(holder) {
   holder.removeAttribute(ICON_ATTR);
 }
 
+// Same width pill
+function applyCount(link, enabled) {
+  const holder = link.querySelector(`.${COUNT_CLASS}`);
+
+  if (!enabled) {
+    if (!holder) return;
+    const original = holder.getAttribute(COUNT_TEXT_ATTR) || holder.textContent;
+    holder.replaceWith(document.createTextNode(original));
+    return;
+  }
+
+  if (holder) return;
+
+  const node = [...link.childNodes].find(
+    (item) => item.nodeType === 3 && /\d/.test(item.nodeValue)
+  );
+  if (!node) return;
+
+  const span = document.createElement("span");
+  span.className = COUNT_CLASS;
+  span.setAttribute(COUNT_TEXT_ATTR, node.nodeValue);
+  span.textContent = node.nodeValue.trim();
+  node.replaceWith(span);
+}
+
 function applyCell(cell, columnId, enabled) {
   const link = cell.querySelector("a");
   const name = MATERIAL_ICON_BY_COLUMN[columnId];
   if (!link || !name) return;
+
+  applyCount(link, enabled);
 
   if (!enabled) {
     link.removeAttribute(PILL_ATTR);
