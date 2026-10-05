@@ -78,7 +78,7 @@ const Settings = () => {
 
         <SettingsToggleRow
           storageKey={BACK_NAVIGATION_KEY}
-          title="Enable classic back button"
+          title="Enable back button"
           description="Back returns to your previous page instead of logging you out. persists on the next page load."
         />
 
