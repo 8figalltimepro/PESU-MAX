@@ -41,6 +41,18 @@ module.exports = (env, argv) => {
         import: path.resolve(__dirname, 'src/content/sideMenuStateStart.js'),
         filename: 'content/sideMenuStateStart.js'
       },
+      'content/themeStart': {
+        import: path.resolve(__dirname, 'src/content/theme/documentStart.js'),
+        filename: 'content/themeStart.js'
+      },
+      'content/menuIconsStart': {
+        import: path.resolve(__dirname, 'src/content/menuIcons/documentStart.js'),
+        filename: 'content/menuIconsStart.js'
+      },
+      'content/materialTableStart': {
+        import: path.resolve(__dirname, 'src/content/materialTable/documentStart.js'),
+        filename: 'content/materialTableStart.js'
+      },
       popup: path.resolve(__dirname, 'src/popup/popup.jsx'),
       options: path.resolve(__dirname, 'src/options/Options.jsx')
     },
@@ -137,6 +149,18 @@ module.exports = (env, argv) => {
           {
             from: 'public/content/sideMenuState.css',
             to: 'content/sideMenuState.css'
+          },
+          {
+            from: 'public/content/theme.css',
+            to: 'content/theme.css'
+          },
+          {
+            from: 'public/content/menuIcons.css',
+            to: 'content/menuIcons.css'
+          },
+          {
+            from: 'public/content/materialTable.css',
+            to: 'content/materialTable.css'
           },
           {
             from: 'public/icons/Pes_logo_square_ui.png',
