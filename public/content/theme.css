@@ -46,6 +46,11 @@ html[data-pesu-max-theme] .table:not(.table-bordered) thead {
   background-color: var(--pesu-max-accent) !important;
 }
 
+/* header divider: accent colour */
+html[data-pesu-max-theme] body .table:not(.table-bordered) thead th + th {
+  border-left-color: var(--pesu-max-accent-bright) !important;
+}
+
 /* Accent actions */
 html[data-pesu-max-theme] .btn-primary {
   background-color: var(--pesu-max-accent-bright) !important;
