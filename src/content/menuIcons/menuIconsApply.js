@@ -15,7 +15,7 @@ export const MENU_ICON_BY_ID = {
   menuTab_651: "Home",
   menuTab_653: "AutoStories",
   menuTab_660: "Checklist",
-  menuTab_669: "TableView",
+  menuTab_669: "AccessTime",
   menuTab_652: "EmojiEvents",
   menuTab_10945130: "VerifiedUser",
   menuTab_679: "ReceiptLong",
