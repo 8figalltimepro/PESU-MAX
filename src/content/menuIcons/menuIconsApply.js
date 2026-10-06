@@ -80,6 +80,8 @@ function applyRow(row) {
 }
 
 function restoreRow(row) {
+  if (!row.hasAttribute(MENU_ICON_ATTR)) return;
+
   const holder = row.querySelector(".menu-image");
   if (!holder) return;
 

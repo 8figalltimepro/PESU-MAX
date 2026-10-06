@@ -64,8 +64,7 @@ html[data-pesu-max-material-table] #CourseContentId .pesu-max-material-icon svg 
   fill: currentColor;
 }
 
-html[data-pesu-max-material-table] .indications[data-pesu-max-material-legend]::before {
-  content: "";
+html[data-pesu-max-material-table] #CourseContentId [data-pesu-max-material-legend-marker] {
   display: inline-block;
   width: 9px;
   height: 9px;
@@ -73,8 +72,7 @@ html[data-pesu-max-material-table] .indications[data-pesu-max-material-legend]::
   border-radius: 50%;
   background: var(--pesu-max-accent, #0091cd);
   vertical-align: middle;
-}
-
-html[data-pesu-max-material-table] .indications[data-pesu-max-material-legend] sup {
-  display: none !important;
+  font-size: 0;
+  line-height: 0;
+  color: transparent;
 }

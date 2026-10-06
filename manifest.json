@@ -49,13 +49,11 @@
     {
       "matches": ["https://www.pesuacademy.com/*"],
       "css": ["content/menuIcons.css"],
-      "js": ["content/menuIconsStart.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://www.pesuacademy.com/*"],
       "css": ["content/materialTable.css"],
-      "js": ["content/materialTableStart.js"],
       "run_at": "document_start"
     },
     {

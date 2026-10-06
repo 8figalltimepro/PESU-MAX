@@ -46,7 +46,7 @@ export const materialTables = () =>
 
 export const MATERIAL_ICON_SELECTOR = 'span[class*="pesu-icon"]';
 export const MATERIAL_NOTE_SELECTOR = ".info-note";
-export const MATERIAL_LEGEND_SELECTOR = ".indications";
+export const MATERIAL_LEGEND_SELECTOR = "#CourseContentId .indications";
 
 const passwordField = () => document.querySelector(LOGIN_PASSWORD_SELECTOR);
 

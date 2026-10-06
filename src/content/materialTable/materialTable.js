@@ -1,11 +1,9 @@
 import { load } from "../../utils/storage.js";
 import { MATERIAL_TABLE_KEY } from "../../utils/storageKeys.js";
 import { MATERIAL_TABLE_ATTR, applyMaterialTable } from "./materialTableApply.js";
-import { writeMaterialTableMirror } from "./materialTableMirror.js";
 
 function setEnabled(enabled) {
   applyMaterialTable(enabled);
-  writeMaterialTableMirror(enabled);
   if (enabled) document.documentElement.setAttribute(MATERIAL_TABLE_ATTR, "");
   else document.documentElement.removeAttribute(MATERIAL_TABLE_ATTR);
 }

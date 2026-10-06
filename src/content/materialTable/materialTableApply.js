@@ -25,8 +25,8 @@ export const MATERIAL_ICON_BY_COLUMN = {
 
 const PILL_ATTR = "data-pesu-max-material-pill";
 const FLAG_ATTR = "data-pesu-max-material-flag";
-const LEGEND_ATTR = "data-pesu-max-material-legend";
-const LEGEND_TEXT_ATTR = "data-pesu-max-material-legend-text";
+const LEGEND_MARKER_ATTR = "data-pesu-max-material-legend-marker";
+const LEGEND_MARKER_SELECTOR = `${MATERIAL_NOTE_SELECTOR}, sup`;
 const ICON_ATTR = "data-pesu-max-material-icon";
 const ICON_CLASS = "pesu-max-material-icon";
 const COUNT_CLASS = "pesu-max-material-count";
@@ -127,30 +127,15 @@ function applyCell(cell, columnId, enabled) {
   if (holder) setIcon(holder, name);
 }
 
+// The legend's "*" marker is drawn as a dot by CSS; the host markup is left untouched.
 function applyLegend(enabled) {
-  const legend = document.querySelector(MATERIAL_LEGEND_SELECTOR);
-  if (!legend) return;
+  document.querySelectorAll(MATERIAL_LEGEND_SELECTOR).forEach((legend) => {
+    const marker = legend.querySelector(LEGEND_MARKER_SELECTOR);
+    if (!marker) return;
 
-  if (!enabled) {
-    legend.removeAttribute(LEGEND_ATTR);
-    const original = legend.getAttribute(LEGEND_TEXT_ATTR);
-    if (original !== null) {
-      legend.textContent = original;
-      legend.removeAttribute(LEGEND_TEXT_ATTR);
-    }
-    return;
-  }
-
-  legend.setAttribute(LEGEND_ATTR, "");
-  if (legend.querySelector("sup")) return;
-
-  const stored = legend.getAttribute(LEGEND_TEXT_ATTR);
-  const text = stored === null ? legend.textContent : stored;
-  if (!/^\s*\*/.test(text)) return;
-
-  const cleaned = text.replace(/^\s*\*\s*/, "");
-  if (stored === null) legend.setAttribute(LEGEND_TEXT_ATTR, text);
-  if (legend.textContent !== cleaned) legend.textContent = cleaned;
+    if (enabled) marker.setAttribute(LEGEND_MARKER_ATTR, "");
+    else marker.removeAttribute(LEGEND_MARKER_ATTR);
+  });
 }
 
 export function applyMaterialTable(enabled) {

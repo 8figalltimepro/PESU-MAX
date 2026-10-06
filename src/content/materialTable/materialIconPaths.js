@@ -1,4 +1,4 @@
-// Material outlined icon paths, extracted from @mui/icons-material. 
+// Material outlined icon paths, extracted from @mui/icons-material.
 // IMP: Line breaks sit where SVG reads whitespace.
 export const MATERIAL_ICON_PATHS = {
   VideoLibraryOutlined: [

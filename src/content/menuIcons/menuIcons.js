@@ -1,11 +1,11 @@
 import { load } from "../../utils/storage.js";
 import { MENU_ICONS_KEY } from "../../utils/storageKeys.js";
 import { MENU_ICONS_ATTR, applyMenuIcons } from "./menuIconsApply.js";
-import { writeMenuIconsMirror } from "./menuIconsMirror.js";
+
+const isEnabled = () => document.documentElement.hasAttribute(MENU_ICONS_ATTR);
 
 function setEnabled(enabled) {
   applyMenuIcons(enabled);
-  writeMenuIconsMirror(enabled);
   if (enabled) document.documentElement.setAttribute(MENU_ICONS_ATTR, "");
   else document.documentElement.removeAttribute(MENU_ICONS_ATTR);
 }
@@ -14,9 +14,17 @@ function setEnabled(enabled) {
 export async function initMenuIcons() {
   setEnabled((await load(MENU_ICONS_KEY)) === true);
 
-  new MutationObserver(() => {
-    applyMenuIcons(document.documentElement.hasAttribute(MENU_ICONS_ATTR));
-  }).observe(document.body || document.documentElement, {
+  let scheduled = false;
+  const rescan = () => {
+    if (scheduled || !isEnabled()) return;
+    scheduled = true;
+    queueMicrotask(() => {
+      scheduled = false;
+      if (isEnabled()) applyMenuIcons(true);
+    });
+  };
+
+  new MutationObserver(rescan).observe(document.body || document.documentElement, {
     childList: true,
     subtree: true,
   });

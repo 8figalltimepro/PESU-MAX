@@ -45,14 +45,6 @@ module.exports = (env, argv) => {
         import: path.resolve(__dirname, 'src/content/theme/documentStart.js'),
         filename: 'content/themeStart.js'
       },
-      'content/menuIconsStart': {
-        import: path.resolve(__dirname, 'src/content/menuIcons/documentStart.js'),
-        filename: 'content/menuIconsStart.js'
-      },
-      'content/materialTableStart': {
-        import: path.resolve(__dirname, 'src/content/materialTable/documentStart.js'),
-        filename: 'content/materialTableStart.js'
-      },
       popup: path.resolve(__dirname, 'src/popup/popup.jsx'),
       options: path.resolve(__dirname, 'src/options/Options.jsx')
     },
