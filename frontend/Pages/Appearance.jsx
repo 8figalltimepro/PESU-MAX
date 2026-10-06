@@ -7,7 +7,6 @@ import theme from "../Themes/theme.jsx";
 import SettingsAccentRow from "../components/Settings/SettingsAccentRow.jsx";
 import SettingsSelectRow from "../components/Settings/SettingsSelectRow.jsx";
 import SettingsToggleRow from "../components/Settings/SettingsToggleRow.jsx";
-import { settingsHintSx } from "../styles/styles.js";
 import { FONT_OPTIONS, THEME_OPTIONS } from "../../src/content/theme";
 import {
   MATERIAL_TABLE_KEY,

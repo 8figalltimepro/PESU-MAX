@@ -13,7 +13,7 @@ const dotStyle = (option) => ({
   borderRadius: "50%",
   backgroundColor: option.accent.bright,
   border: `3px solid ${option.background}`,
-  boxShadow: "0 0 0 1px rgba(35, 58, 118, 0.25)",
+  boxShadow: `0 0 0 1px ${theme.colors.secondaryOutline}`,
 });
 
 const pickerSx = {
@@ -25,13 +25,13 @@ const pickerSx = {
   border: "1.5px solid",
   borderColor: theme.colors.primary,
   borderRadius: "8px",
-  backgroundColor: "#ffffff",
+  backgroundColor: theme.colors.onSolid,
   color: theme.colors.secondary,
   fontSize: "12.5px",
   fontWeight: 400,
   whiteSpace: "nowrap",
   textTransform: "none",
-  "&:hover": { borderColor: theme.colors.primaryHover, backgroundColor: "#ffffff" },
+  "&:hover": { borderColor: theme.colors.primaryHover, backgroundColor: theme.colors.onSolid },
 };
 
 const dotSx = (option, selected) => ({
@@ -44,12 +44,12 @@ const dotSx = (option, selected) => ({
   backgroundColor: `${option.accent.bright} !important`,
   boxShadow: selected
     ? `0 0 0 2px ${theme.colors.primary}`
-    : "0 0 0 2px rgba(35, 58, 118, 0.2)",
+    : `0 0 0 2px ${theme.colors.secondaryBorder}`,
   "&:hover": {
     backgroundColor: `${option.accent.bright} !important`,
     boxShadow: selected
       ? `0 0 0 2px ${theme.colors.primaryHover}`
-      : "0 0 0 2px rgba(35, 58, 118, 0.45)",
+      : `0 0 0 2px ${theme.colors.secondaryBorderHover}`,
   },
   "&.Mui-selected": { backgroundColor: `${option.accent.bright} !important` },
 });
