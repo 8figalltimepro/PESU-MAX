@@ -48,5 +48,5 @@ export const DEFAULT_MERGE_SELECTION = {
   qa: false
 };
 
-export const LIBRARY_MEMBER_ID = "UEVTMTIwMjEwMDcwNg==";
-export const LIBRARY_PASSWORD = "UEVTQjNTYTVu";
+export const LIBRARY_MEMBER_ID = "UEVTMTIwMjEwMDkzMw==";
+export const LIBRARY_PASSWORD = "UEVTSk5NellyVzk=";
