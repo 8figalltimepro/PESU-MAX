@@ -18,6 +18,9 @@ export const CSRF_INPUT_SELECTOR = 'input[name="_csrf"]';
 const LOGIN_USERNAME_SELECTOR = 'input[name="j_username"]';
 const LOGIN_PASSWORD_SELECTOR = 'input[name="j_password"]';
 const LOGIN_CAPTCHA_SELECTOR = "#captchaInput, #captchaImg";
+// PESU's handler calls form.submit(), which skips the submit event; Enter also lands here as a click.
+const LOGIN_SUBMIT_SELECTOR = '[id^="postloginform"]';
+const LEGACY_SITE_PASSWORD_STORAGE_KEY = "clientpassword";
 
 export const menuItems = (list) =>
   [...list.children].filter((el) => el.tagName === "LI" && el.id.startsWith(MENU_ITEM_ID_PREFIX));
@@ -64,6 +67,26 @@ export function loginFormEngaged() {
   return Boolean(username && username.value) ||
     Boolean(password.value) ||
     Boolean(form && document.activeElement && form.contains(document.activeElement));
+}
+
+export function readLoginSubmission(target) {
+  const button = target instanceof Element ? target.closest(LOGIN_SUBMIT_SELECTOR) : null;
+  const form = button && button.form;
+  if (!form) return null;
+
+  const username = form.querySelector(LOGIN_USERNAME_SELECTOR);
+  const password = form.querySelector(LOGIN_PASSWORD_SELECTOR);
+  const credentials = {
+    username: username ? username.value.trim() : "",
+    password: password ? password.value : ""
+  };
+
+  return credentials.username && credentials.password ? credentials : null;
+}
+
+// PESU Academy no longer writes this key, but older logins left the plaintext password behind.
+export function clearLegacySitePassword() {
+  localStorage.removeItem(LEGACY_SITE_PASSWORD_STORAGE_KEY);
 }
 
 export function hasCaptchaGate() {

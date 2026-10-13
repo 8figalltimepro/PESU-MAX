@@ -8,18 +8,21 @@ import {
   ACADEMY_BASE_URL,
   ACADEMY_PROFILE_PATH
 } from "../helpers/academyAuth.js";
+import { forgetStoredCredentials } from "../helpers/academyCredentials.js";
 import {
-  captureCredentials,
-  forgetStoredCredentials
-} from "../helpers/academyCredentials.js";
-import { loginToAcademy, readSessionToken } from "../services/academySession.js";
+  loginToAcademy,
+  readSessionToken,
+  rememberCredentials
+} from "../services/academySession.js";
 import { syncPageCsrfToken } from "./csrfSync/csrfSync.js";
 import {
   ACADEMY_APP_PATH_PREFIX,
   LOG_PREFIX,
+  clearLegacySitePassword,
   hasCaptchaGate,
   hasLoginForm,
-  loginFormEngaged
+  loginFormEngaged,
+  readLoginSubmission
 } from "./academyPage.js";
 
 // Check interval: 4 mins
@@ -48,7 +51,6 @@ async function attemptReLogin(isCurrent) {
 
   if (loggedIn) {
     sessionStorage.removeItem(REJECT_COUNT_KEY);
-    await captureCredentials(isCurrent);
     return "ok";
   }
 
@@ -76,7 +78,6 @@ async function settleAppPage(isCurrent) {
   if (session.alive) {
     // User Logged in
     syncPageCsrfToken(session.csrfToken);
-    await captureCredentials(isCurrent);
     return;
   }
 
@@ -111,6 +112,14 @@ async function settleLoginPage(isCurrent) {
 }
 
 let generation = 0;
+let keeperEnabled = false;
+
+// The login page unloads right after this click, so the background worker does the storing.
+function rememberLoginSubmission(event) {
+  if (!keeperEnabled) return;
+  const credentials = readLoginSubmission(event.target);
+  if (credentials) void rememberCredentials(credentials).catch(() => {});
+}
 
 async function settleSession() {
   const currentGeneration = generation;
@@ -127,6 +136,12 @@ async function settleSession() {
 }
 
 export function startSessionKeeper() {
+  clearLegacySitePassword();
+  void load(SESSION_KEEPER_KEY).then((enabled) => {
+    keeperEnabled = enabled === true;
+  }).catch(() => {});
+  document.addEventListener("click", rememberLoginSubmission, true);
+
   if (hasLoginForm()) {
     setTimeout(() => void settleSession().catch(() => {}), LOGIN_PAGE_GRACE_MS);
   } else if (location.pathname.startsWith(ACADEMY_APP_PATH_PREFIX)) {
@@ -137,6 +152,7 @@ export function startSessionKeeper() {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes[SESSION_KEEPER_KEY]) {
+      keeperEnabled = changes[SESSION_KEEPER_KEY].newValue === true;
       generation += 1;
       void settleSession().catch(() => {});
     }

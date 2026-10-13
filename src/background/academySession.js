@@ -1,5 +1,5 @@
 import { probeSession, loginToAcademy, readSessionToken } from "../helpers/academyAuth.js";
-import { readStoredCredentials } from "../helpers/academyCredentials.js";
+import { readStoredCredentials, rememberCredentials } from "../helpers/academyCredentials.js";
 import { resetCsrfToken } from "../helpers/pesuAPI.js";
 import { load } from "../utils/storage.js";
 import { SESSION_KEEPER_KEY } from "../utils/storageKeys.js";
@@ -13,8 +13,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-export async function handleAcademySession(action) {
+export async function handleAcademySession(action, request) {
   if ((await load(SESSION_KEEPER_KEY)) !== true) return null;
+  if (action === "rememberAcademyCredentials") return rememberCredentials(request.credentials || {});
   if (action === "probeAcademySession") return probeSession();
   if (action === "readAcademySessionToken") return readSessionToken();
   if (loginController) return null;

@@ -1,6 +1,6 @@
-function requestSession(action) {
+function requestSession(action, payload = {}) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ action }, (response) => {
+    chrome.runtime.sendMessage({ ...payload, action }, (response) => {
       const error = chrome.runtime.lastError;
       if (error || response?.error) {
         reject(new Error(error?.message || response.error));
@@ -18,3 +18,5 @@ function requestSession(action) {
 export const probeSession = () => requestSession("probeAcademySession");
 export const readSessionToken = () => requestSession("readAcademySessionToken");
 export const loginToAcademy = () => requestSession("restoreAcademySession");
+export const rememberCredentials = (credentials) =>
+  requestSession("rememberAcademyCredentials", { credentials });

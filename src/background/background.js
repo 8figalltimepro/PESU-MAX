@@ -21,9 +21,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (
     request.action === "probeAcademySession" ||
     request.action === "readAcademySessionToken" ||
-    request.action === "restoreAcademySession"
+    request.action === "restoreAcademySession" ||
+    request.action === "rememberAcademyCredentials"
   ) {
-    handleAcademySession(request.action)
+    handleAcademySession(request.action, request)
       .then((data) => sendResponse({ data }))
       .catch((error) => sendResponse({ error: error.message }));
     return true;
