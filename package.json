@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "webpack --mode development --watch",
     "build": "webpack --mode production",
-    "build:dev": "webpack --mode development"
+    "build:dev": "webpack --mode development",
+    "library:refresh": "node scripts/refreshLibraryIndex.mjs",
+    "library:refresh-all": "node scripts/refreshLibraryIndex.mjs --all"
   },
   "description": "",
   "main": "index.js",

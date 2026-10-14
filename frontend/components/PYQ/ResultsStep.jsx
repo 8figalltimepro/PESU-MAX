@@ -65,7 +65,7 @@ const ResultsStep = () => {
   const canFilterYearLocally = useSelector(selectCanFilterYearLocally);
 
   const selectableResults = useMemo(
-    () => visibleResults.filter((item) => item.downloadPath),
+    () => visibleResults.filter((item) => item.recordId),
     [visibleResults]
   );
 
@@ -104,6 +104,8 @@ const ResultsStep = () => {
     dispatch(
       downloadPyq({
         itemId: item.id,
+        recordId: item.recordId,
+        courseCode: item.courseCode,
         downloadPath: item.downloadPath,
         title: item.title
       })
@@ -128,6 +130,8 @@ const ResultsStep = () => {
       .filter((item) => selectedPyqs[item.id])
       .map((item) => ({
         id: item.id,
+        recordId: item.recordId,
+        courseCode: item.courseCode,
         title: item.title,
         downloadPath: item.downloadPath
       }));

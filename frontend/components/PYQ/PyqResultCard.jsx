@@ -59,7 +59,7 @@ const PyqResultCard = ({ item, selected, downloading, busy, onToggleSelection, o
         <Checkbox
           size="small"
           checked={selected}
-          disabled={!item.downloadPath || busy}
+          disabled={!item.recordId || busy}
           onChange={() => onToggleSelection(item.id)}
           sx={{ ...checkboxSx, padding: "2px" }}
         />
@@ -85,7 +85,7 @@ const PyqResultCard = ({ item, selected, downloading, busy, onToggleSelection, o
           size="small"
           aria-label={downloading ? "Downloading PYQ" : "Download PYQ"}
           onClick={() => onDownload(item)}
-          disabled={!item.downloadPath || downloading || busy}
+          disabled={!item.recordId || downloading || busy}
           sx={downloadButtonSx}
         >
           {downloading ? (

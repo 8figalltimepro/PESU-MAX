@@ -1,6 +1,8 @@
 import JSZip from "jszip";
 import * as cheerio from "cheerio";
 import { load, save } from "../utils/storage.js";
+import { courseCodeFromTitle } from "../helpers/libraryCourseCodes.js";
+import { LIBRARY_PUBLIC_ORIGIN } from "../helpers/libraryFileIndex.js";
 import {
   readCachedSearch,
   serializeLibraryRequest,
@@ -8,20 +10,17 @@ import {
   withFileSlot,
   writeCachedSearch
 } from "./libraryRequestCache.js";
+import { attachPublicFileUrls, invalidatePublicFile, resolvePublicFileUrl } from "./libraryPublicFiles.js";
 
-const LIBRARY_BASE_URL = "http://14.143.33.149";
-const LOGIN_URL = `${LIBRARY_BASE_URL}/MyPage.aspx`;
+const LIBRARY_BASE_URL = LIBRARY_PUBLIC_ORIGIN;
 const SEARCH_URL = `${LIBRARY_BASE_URL}/Search.aspx`;
 const LIBRARY_GRID_EVENT_TARGET = "GridView1";
-const LIBRARY_AUTH_COOKIE = ".ASPXFORMSAUTH";
-const LOGIN_TOKENS_KEY = "libraryLoginTokens";
 const SEARCH_TOKENS_KEY = "librarySearchTokens";
 const PYQ_CATEGORY = "Digital Library";
 const EAGER_RESULT_LIMIT = 40;
 const EAGER_PAGE_LIMIT = 4;
 const PDF_CACHE_TTL_MS = 15 * 60 * 1000;
 
-let loginInFlight = null;
 const libraryRequestCounts = {};
 
 async function trackedLibraryFetch(requestType, url, options) {
@@ -70,16 +69,9 @@ function decodeHtmlEntities(value) {
     .trim();
 }
 
-function decodeBase64(value) {
-  if (!value) {
-    return "";
-  }
-
-  try {
-    return atob(value).trim();
-  } catch (error) {
-    throw new Error("Invalid base64 credential format");
-  }
+function extractRecordId(rawId) {
+  const match = normalizeText(rawId).match(/DL\s*\d+/i);
+  return match ? match[0].replace(/\s+/g, "").toUpperCase() : normalizeText(rawId);
 }
 
 function sanitizeFilename(name) {
@@ -148,17 +140,6 @@ function extractAspNetFieldsFromDelta(payload) {
   };
 }
 
-function extractLoggedInIdentity(payload) {
-  const labelMatch = (payload || "").match(
-    /<span[^>]*(?:id|name)=["']Label1["'][^>]*>([\s\S]*?)<\/span>/i
-  );
-  return normalizeText(decodeHtmlEntities((labelMatch?.[1] || "").replace(/<[^>]+>/g, "")));
-}
-
-function isGuestPage(payload) {
-  return extractLoggedInIdentity(payload).toLowerCase() === "guest";
-}
-
 function inferSemesterFromCode(code) {
   if (!code) {
     return null;
@@ -191,15 +172,6 @@ function toLibraryCodeQuery(subjectCode) {
   return codeWithoutBatch.length >= 4 ? codeWithoutBatch : code;
 }
 
-async function getLibraryAuthCookie() {
-  return new Promise((resolve) => {
-    chrome.cookies.get(
-      { url: `${LIBRARY_BASE_URL}/`, name: LIBRARY_AUTH_COOKIE },
-      (cookie) => resolve(cookie || null)
-    );
-  });
-}
-
 function hasFormTokens(tokens) {
   return Boolean(tokens?.viewState && tokens?.eventValidation);
 }
@@ -213,7 +185,7 @@ function fetchFormTokens(storageKey, url, requestType) {
   return singleFlight(`tokens:${storageKey}`, async () => {
     const response = await trackedLibraryFetch(requestType, url, {
       method: "GET",
-      credentials: "include"
+      credentials: "omit"
     });
     const html = await response.text();
     if (!response.ok) throw new Error(`Library unavailable (HTTP ${response.status})`);
@@ -233,67 +205,6 @@ async function getSearchTokens({ refresh = false } = {}) {
   return cached || fetchFormTokens(SEARCH_TOKENS_KEY, SEARCH_URL, "search-page");
 }
 
-async function submitLogin(tokens, memberId, password) {
-  const response = await trackedLibraryFetch("login-submit", LOGIN_URL, {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: new URLSearchParams({
-      __VIEWSTATE: tokens.viewState,
-      __VIEWSTATEGENERATOR: tokens.viewStateGenerator,
-      __EVENTVALIDATION: tokens.eventValidation,
-      txtMemberid: memberId,
-      txtPassword: password,
-      signin: "Sign In"
-    }).toString(),
-    redirect: "manual"
-  });
-
-  const redirected = response.type === "opaqueredirect"
-    || (response.status >= 300 && response.status < 400);
-  return redirected && Boolean((await getLibraryAuthCookie())?.value);
-}
-
-async function loginToLibrary(encodedMemberId, encodedPassword) {
-  const memberId = decodeBase64(encodedMemberId);
-  const password = decodeBase64(encodedPassword);
-
-  if (!memberId || !password) {
-    throw new Error("Missing library credentials");
-  }
-
-  const cachedTokens = await loadFormTokens(LOGIN_TOKENS_KEY);
-  if (cachedTokens && await submitLogin(cachedTokens, memberId, password)) {
-    return;
-  }
-
-  const freshTokens = await fetchFormTokens(LOGIN_TOKENS_KEY, LOGIN_URL, "login-page");
-  if (await submitLogin(freshTokens, memberId, password)) {
-    return;
-  }
-
-  throw new Error("Library login failed");
-}
-
-function loginWithCoalescing({ encodedMemberId, encodedPassword }) {
-  if (!loginInFlight) {
-    loginInFlight = loginToLibrary(encodedMemberId, encodedPassword)
-      .finally(() => {
-        loginInFlight = null;
-      });
-  }
-
-  return loginInFlight;
-}
-
-async function ensureLibraryCookie(credentials) {
-  if (!(await getLibraryAuthCookie())?.value) {
-    await loginWithCoalescing(credentials);
-  }
-}
-
 function classifySearchResponse(response, responseText) {
   if (/^\d+\|error\|/.test(responseText)
     || /validation of viewstate|invalid postback|invalid viewstate/i.test(responseText)) {
@@ -301,10 +212,8 @@ function classifySearchResponse(response, responseText) {
   }
 
   if (response.status === 401 || response.status === 403
-    || /mypage\.aspx/i.test(response.url)
-    || /\|pageredirect\|[^|]*\|?[^|]*mypage\.aspx/i.test(responseText)
-    || isGuestPage(responseText)) {
-    return "logged-out";
+    || /\|pageredirect\|[^|]*\|?[^|]*mypage\.aspx/i.test(responseText)) {
+    throw new Error("The library refused an anonymous search. Try again later.");
   }
 
   if (!response.ok) {
@@ -321,7 +230,7 @@ function classifySearchResponse(response, responseText) {
 async function postLibrarySearch(formData, requestType) {
   const response = await trackedLibraryFetch(requestType, SEARCH_URL, {
     method: "POST",
-    credentials: "include",
+    credentials: "omit",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
       "X-Requested-With": "XMLHttpRequest",
@@ -334,20 +243,8 @@ async function postLibrarySearch(formData, requestType) {
   return { status: classifySearchResponse(response, responseText), responseText };
 }
 
-async function sendSearchPostback(formData, requestType, credentials) {
-  await ensureLibraryCookie(credentials);
-
-  const result = await postLibrarySearch(formData, requestType);
-  if (result.status !== "logged-out") {
-    return result;
-  }
-
-  await loginWithCoalescing(credentials);
-  const retry = await postLibrarySearch(formData, `${requestType}-retry`);
-  if (retry.status === "logged-out") {
-    throw new Error("Library login failed");
-  }
-  return retry;
+function sendSearchPostback(formData, requestType) {
+  return postLibrarySearch(formData, requestType);
 }
 
 const pdfCache = new Map();
@@ -370,7 +267,7 @@ async function fetchLibraryFile(absoluteUrl) {
   return singleFlight(`pdf:${absoluteUrl}`, () => withFileSlot(async () => {
     const response = await trackedLibraryFetch("pdf", absoluteUrl, {
       method: "GET",
-      credentials: "include"
+      credentials: "omit"
     });
     if (!response.ok) throw new Error(`Unable to download file (HTTP ${response.status})`);
 
@@ -426,7 +323,8 @@ function parseResultRow($, rowElement, index) {
     .find("span")
     .filter((_, el) => normalizeText($(el).text()).startsWith("ID:"))
     .first();
-  const recordId = normalizeText(idLabel.next("span").first().text());
+  // The cell reads "DL16049 ( Digital Library )".
+  const recordId = extractRecordId(normalizeText(idLabel.next("span").first().text()));
 
   const callNoLabel = row
     .find("span")
@@ -445,8 +343,7 @@ function parseResultRow($, rowElement, index) {
   const statusMatch = statusContainerText.match(/Status:\s*([A-Za-z]+)/i);
   const status = statusMatch?.[1] || "Unknown";
 
-  const courseCodeMatch = title.match(/\(([A-Z0-9]+)\)\s*$/i);
-  const courseCode = courseCodeMatch?.[1] || "";
+  const courseCode = courseCodeFromTitle(title);
   const stableId = downloadPath || recordId || `${title}-${yearEdition}-${callNo}-${index}`;
 
   return {
@@ -543,12 +440,11 @@ function buildPaginationPayload({ query, year, viewState, eventValidation, viewS
   });
 }
 
-async function fetchFirstSearchPage({ query, year }, credentials) {
+async function fetchFirstSearchPage({ query, year }) {
   const tokens = await getSearchTokens();
   const result = await sendSearchPostback(
     buildSearchPayload({ query, year, ...tokens }),
-    "search-submit",
-    credentials
+    "search-submit"
   );
   if (result.status !== "stale") {
     return result.responseText;
@@ -557,8 +453,7 @@ async function fetchFirstSearchPage({ query, year }, credentials) {
   const freshTokens = await getSearchTokens({ refresh: true });
   const retry = await sendSearchPostback(
     buildSearchPayload({ query, year, ...freshTokens }),
-    "search-retry",
-    credentials
+    "search-retry"
   );
   if (retry.status === "stale") {
     throw new Error("Library search failed. Please try again.");
@@ -566,11 +461,10 @@ async function fetchFirstSearchPage({ query, year }, credentials) {
   return retry.responseText;
 }
 
-async function fetchNextSearchPage({ query, year, cursor }, credentials) {
+async function fetchNextSearchPage({ query, year, cursor }) {
   const result = await sendSearchPostback(
     buildPaginationPayload({ query, year, ...cursor }),
-    "pagination-submit",
-    credentials
+    "pagination-submit"
   );
   if (result.status === "stale") {
     throw new Error("These search results have expired. Please search again.");
@@ -611,8 +505,22 @@ function sortByNewestYear(results) {
   return [...results].sort((first, second) => (second.year || 0) - (first.year || 0));
 }
 
-async function performLibrarySearch({ query, year }, credentials) {
-  const firstPage = readSearchPage(await fetchFirstSearchPage({ query, year }, credentials), query);
+// One result page is one upload batch, so the salt is resolved once for it.
+async function readSearchPageWithFiles(responseText, query) {
+  const page = readSearchPage(responseText, query);
+  if (page.results.length === 0) {
+    return page;
+  }
+
+  const courseCode = page.results
+    .map((item) => item.courseCode)
+    .find((code) => Boolean(code)) || "";
+
+  return { ...page, results: await attachPublicFileUrls(page.results, courseCode, query) };
+}
+
+async function performLibrarySearch({ query, year }) {
+  const firstPage = await readSearchPageWithFiles(await fetchFirstSearchPage({ query, year }), query);
   let entry = appendSearchPage(
     { query, year, totalResults: 0, results: [], complete: false, nextCursor: null },
     firstPage
@@ -620,8 +528,8 @@ async function performLibrarySearch({ query, year }, credentials) {
 
   if (entry.totalResults <= EAGER_RESULT_LIMIT) {
     for (let pageCount = 1; pageCount < EAGER_PAGE_LIMIT && !entry.complete; pageCount += 1) {
-      const page = readSearchPage(
-        await fetchNextSearchPage({ query, year, cursor: entry.nextCursor }, credentials),
+      const page = await readSearchPageWithFiles(
+        await fetchNextSearchPage({ query, year, cursor: entry.nextCursor }),
         query
       );
       entry = appendSearchPage(entry, page);
@@ -736,12 +644,7 @@ export async function getPyqCourseCatalog() {
   };
 }
 
-export async function loginLibraryWithCredentials({ encodedMemberId, encodedPassword }) {
-  await ensureLibraryCookie({ encodedMemberId, encodedPassword });
-  return { isAuthenticated: true };
-}
-
-export async function searchLibraryPyqs({ query, year, encodedMemberId, encodedPassword }) {
+export async function searchLibraryPyqs({ query, year }) {
   const cleanQuery = normalizeText(query);
   const cleanYear = normalizeText(year);
   if (!cleanQuery) {
@@ -755,16 +658,13 @@ export async function searchLibraryPyqs({ query, year, encodedMemberId, encodedP
   }
 
   return singleFlight(`search:${cacheKey}`, () => serializeLibraryRequest(async () => {
-    const entry = await performLibrarySearch(
-      { query: cleanQuery, year: cleanYear },
-      { encodedMemberId, encodedPassword }
-    );
+    const entry = await performLibrarySearch({ query: cleanQuery, year: cleanYear });
     await writeCachedSearch(cacheKey, entry);
     return entry;
   }));
 }
 
-export async function loadMoreLibraryPyqs({ query, year, cursor, encodedMemberId, encodedPassword }) {
+export async function loadMoreLibraryPyqs({ query, year, cursor }) {
   const cleanQuery = normalizeText(query);
   const cleanYear = normalizeText(year);
   if (!cleanQuery) {
@@ -777,11 +677,8 @@ export async function loadMoreLibraryPyqs({ query, year, cursor, encodedMemberId
 
   const cacheKey = searchCacheKey(cleanQuery, cleanYear);
   return singleFlight(`page:${cacheKey}:${cursor.viewState}`, () => serializeLibraryRequest(async () => {
-    const page = readSearchPage(
-      await fetchNextSearchPage(
-        { query: cleanQuery, year: cleanYear, cursor },
-        { encodedMemberId, encodedPassword }
-      ),
+    const page = await readSearchPageWithFiles(
+      await fetchNextSearchPage({ query: cleanQuery, year: cleanYear, cursor }),
       cleanQuery
     );
 
@@ -794,14 +691,36 @@ export async function loadMoreLibraryPyqs({ query, year, cursor, encodedMemberId
   }));
 }
 
-export async function downloadLibraryPyq({ downloadPath, title }) {
-  const absoluteUrl = toAbsoluteLibraryUrl(downloadPath);
-  if (!absoluteUrl) {
+// Tries the predicted URL first, then falls back to the full candidate plan.
+async function resolveVerifiedFileUrl({ recordId, courseCode, downloadPath }) {
+  const predicted = toAbsoluteLibraryUrl(downloadPath);
+  const candidates = predicted ? [predicted] : [];
+
+  for (const candidate of [...candidates, null]) {
+    const url = candidate
+      || await resolvePublicFileUrl({ recordId, courseCode });
+
+    if (!url) {
+      continue;
+    }
+
+    try {
+      return { url, buffer: await fetchLibraryFile(url) };
+    } catch (error) {
+      await invalidatePublicFile(recordId);
+    }
+  }
+
+  throw new Error("This paper is not available in the library file server");
+}
+
+export async function downloadLibraryPyq({ recordId, courseCode, downloadPath, title }) {
+  if (!recordId && !downloadPath) {
     throw new Error("Invalid download URL");
   }
 
-  const fileBuffer = await fetchLibraryFile(absoluteUrl);
-  const dataUrl = `data:application/pdf;base64,${arrayBufferToBase64(fileBuffer)}`;
+  const { url, buffer } = await resolveVerifiedFileUrl({ recordId, courseCode, downloadPath });
+  const dataUrl = `data:application/pdf;base64,${arrayBufferToBase64(buffer)}`;
 
   const fallbackName = `PYQ_${Date.now()}`;
   const safeName = sanitizeFilename(title || fallbackName) || fallbackName;
@@ -811,7 +730,7 @@ export async function downloadLibraryPyq({ downloadPath, title }) {
   return {
     downloadId,
     fileName,
-    sourceUrl: absoluteUrl
+    sourceUrl: url
   };
 }
 
@@ -840,17 +759,16 @@ export async function downloadLibraryPyqsZip({ items, query }) {
 
         const { item, index } = next;
         try {
-          const absoluteUrl = toAbsoluteLibraryUrl(item.downloadPath);
-          if (!absoluteUrl) {
-            throw new Error("Invalid download URL");
-          }
-
-          const fileBuffer = await fetchLibraryFile(absoluteUrl);
+          const { buffer } = await resolveVerifiedFileUrl({
+            recordId: item.recordId,
+            courseCode: item.courseCode,
+            downloadPath: item.downloadPath
+          });
           const fallbackName = `PYQ_${index + 1}`;
           const safeName = sanitizeFilename(item.title || fallbackName) || fallbackName;
           const fileName = `${String(index + 1).padStart(2, "0")}_${ensurePdfExtension(safeName)}`;
 
-          zip.file(fileName, fileBuffer, {
+          zip.file(fileName, buffer, {
             binary: true,
             compression: "STORE"
           });

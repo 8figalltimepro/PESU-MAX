@@ -1,33 +1,14 @@
 import { createAsyncThunk, createSelector, createSlice } from "@reduxjs/toolkit";
 import {
   fetchPyqCatalog,
-  initializeLibraryLogin,
   loadMoreCoursePyqs,
   searchCoursePyqs,
   downloadCoursePyq,
   downloadSelectedCoursePyqsZip
 } from "../../src/services/pyqService.js";
-import {
-  LIBRARY_MEMBER_ID,
-  LIBRARY_PASSWORD
-} from "../constants/constants.js";
 
 export const ALL_PYQ_YEARS = "";
 export const PYQ_PAGE_SIZE = 10;
-
-export const initLibraryAuth = createAsyncThunk(
-  "pyq/initLibraryAuth",
-  async (_, { rejectWithValue }) => {
-    try {
-      return await initializeLibraryLogin({
-        encodedMemberId: LIBRARY_MEMBER_ID,
-        encodedPassword: LIBRARY_PASSWORD
-      });
-    } catch (error) {
-      return rejectWithValue(error.message);
-    }
-  }
-);
 
 export const loadPyqCatalog = createAsyncThunk(
   "pyq/loadPyqCatalog",
@@ -44,12 +25,7 @@ export const searchPyqs = createAsyncThunk(
   "pyq/searchPyqs",
   async ({ query, year }, { rejectWithValue }) => {
     try {
-      return await searchCoursePyqs({
-        query,
-        year,
-        encodedMemberId: LIBRARY_MEMBER_ID,
-        encodedPassword: LIBRARY_PASSWORD
-      });
+      return await searchCoursePyqs({ query, year });
     } catch (error) {
       return rejectWithValue(error.message);
     }
@@ -68,9 +44,7 @@ export const loadMorePyqs = createAsyncThunk(
       return await loadMoreCoursePyqs({
         query: pyq.lastQuery,
         year: pyq.lastSearchYear,
-        cursor: pyq.nextPageCursor,
-        encodedMemberId: LIBRARY_MEMBER_ID,
-        encodedPassword: LIBRARY_PASSWORD
+        cursor: pyq.nextPageCursor
       });
     } catch (error) {
       return rejectWithValue(error.message);
@@ -90,9 +64,9 @@ export const loadMorePyqs = createAsyncThunk(
 
 export const downloadPyq = createAsyncThunk(
   "pyq/downloadPyq",
-  async ({ downloadPath, title, itemId }, { rejectWithValue }) => {
+  async ({ recordId, courseCode, downloadPath, title, itemId }, { rejectWithValue }) => {
     try {
-      const data = await downloadCoursePyq({ downloadPath, title });
+      const data = await downloadCoursePyq({ recordId, courseCode, downloadPath, title });
       return { ...data, itemId };
     } catch (error) {
       return rejectWithValue(error.message);
@@ -132,8 +106,6 @@ const initialState = {
   lastSearchYear: ALL_PYQ_YEARS,
   selectedYear: ALL_PYQ_YEARS,
   catalogLoading: false,
-  authLoading: false,
-  authReady: false,
   searchLoading: false,
   loadingMore: false,
   downloadingItemId: null,
@@ -141,7 +113,6 @@ const initialState = {
   downloadSuccessItemId: null,
   bulkDownloadResult: null,
   error: null,
-  authError: null,
   searchError: null,
   loadMoreError: null,
   downloadError: null,
@@ -246,19 +217,6 @@ const pyqSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(initLibraryAuth.pending, (state) => {
-        state.authLoading = true;
-        state.authError = null;
-      })
-      .addCase(initLibraryAuth.fulfilled, (state) => {
-        state.authLoading = false;
-        state.authReady = true;
-      })
-      .addCase(initLibraryAuth.rejected, (state, action) => {
-        state.authLoading = false;
-        state.authReady = false;
-        state.authError = action.payload;
-      })
       .addCase(loadPyqCatalog.pending, (state) => {
         state.catalogLoading = true;
         state.error = null;
