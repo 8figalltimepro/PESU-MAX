@@ -43,7 +43,7 @@
     },
     {
       "matches": ["https://www.pesuacademy.com/*"],
-      "css": ["content/sideMenuDock.css"],
+      "css": ["content/sideMenuDock.css", "content/summary.css"],
       "js": ["content/sideMenuDockStart.js"],
       "run_at": "document_start"
     },

@@ -53,8 +53,11 @@ html[data-pesu-max-dock] .pesu-max-dock-item {
   transition: background-color 0.16s ease;
 }
 
-/* Dock sections centred between the top and the All button. */
-html[data-pesu-max-dock] .pesu-max-dock-item:first-child {
+/* Summary sits at the top; sections are centred between it and All. */
+html[data-pesu-max-dock] .pesu-max-dock-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-top: auto;
 }
 
@@ -87,15 +90,35 @@ html[data-pesu-max-dock] #pesu-max-dock-all[data-pesu-max-dock-open]::before {
   transform: translateY(-50%);
 }
 
+html[data-pesu-max-dock] #pesu-max-dock-summary,
 html[data-pesu-max-dock] #pesu-max-dock-all {
-  margin-top: auto;
   border: 1px dashed var(--pesu-max-dock-line);
 }
 
+html[data-pesu-max-dock] #pesu-max-dock-all {
+  margin-top: auto;
+}
+
+html[data-pesu-max-dock] #pesu-max-dock-summary:hover,
+html[data-pesu-max-dock] #pesu-max-dock-all:hover {
+  border-color: var(--pesu-max-dock-line-strong);
+}
+
+html[data-pesu-max-dock] #pesu-max-dock-summary[data-pesu-max-dock-active],
 html[data-pesu-max-dock] #pesu-max-dock-all[data-pesu-max-dock-elsewhere],
 html[data-pesu-max-dock] #pesu-max-dock-all[data-pesu-max-dock-open] {
   background-color: var(--pesu-max-dock-active-fill);
   border-color: var(--pesu-max-dock-line-strong);
+}
+
+html[data-pesu-max-dock] #pesu-max-dock-summary[data-pesu-max-dock-active],
+html[data-pesu-max-dock] #pesu-max-dock-all[data-pesu-max-dock-elsewhere],
+html[data-pesu-max-dock] #pesu-max-dock-all[data-pesu-max-dock-open] {
+  box-shadow: inset 0 0 0 100px rgba(0, 0, 0, 0.22);
+}
+
+html[data-pesu-max-dock] #pesu-max-dock-summary[data-pesu-max-dock-active] {
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 html[data-pesu-max-dock] .pesu-max-dock-glyph {

@@ -2,6 +2,7 @@ import { load } from "../../utils/storage.js";
 import { SIDE_MENU_DOCK_KEY, SIDE_MENU_DOCK_SECTIONS_KEY } from "../../utils/storageKeys.js";
 import { SIDE_MENU_CONTENT_SELECTOR, SIDE_MENU_SELECTOR, menuItems } from "../academyPage.js";
 import { MENU_ICON_BY_ID } from "../menuIcons/menuIconsApply.js";
+import { clearSummaryHash, createSummary } from "../summary/summary.js";
 import { PANEL_ID, buildAllSectionsPanel } from "./allSectionsPanel.js";
 import { glyph } from "./dockIcon.js";
 import { DOCK_ATTR, writeDockMirror } from "./dockState.js";
@@ -15,6 +16,7 @@ import {
 
 export const DOCK_ID = "pesu-max-dock";
 export const ALL_BUTTON_ID = "pesu-max-dock-all";
+export const SUMMARY_BUTTON_ID = "pesu-max-dock-summary";
 export const DOCK_ACTIVE_ATTR = "data-pesu-max-dock-active";
 export const DOCK_ELSEWHERE_ATTR = "data-pesu-max-dock-elsewhere";
 
@@ -67,6 +69,23 @@ function dockButton(id, label) {
   return button;
 }
 
+function summaryButton() {
+  const button = dockIconButton("DonutLarge", "Summary");
+  button.id = SUMMARY_BUTTON_ID;
+  button.setAttribute("aria-controls", "pesu-max-summary");
+  button.setAttribute("aria-expanded", "false");
+
+  const text = document.createElement("span");
+  text.className = "pesu-max-dock-label";
+  text.textContent = "Summary";
+  button.appendChild(text);
+
+  button.addEventListener("click", () => {
+    if (mounted && mounted.summaryController) mounted.summaryController.toggle();
+  });
+  return button;
+}
+
 function allButton() {
   const button = dockIconButton("GridView", "All");
   button.id = ALL_BUTTON_ID;
@@ -80,7 +99,10 @@ function allButton() {
   return button;
 }
 
-function selectSection(id) {
+function selectSection(id, { fromSummary = false } = {}) {
+  if (!fromSummary && mounted && mounted.summaryController) {
+    mounted.summaryController.closeForNavigation();
+  }
   if (mounted) mounted.panel.close();
   const item = document.getElementById(id);
   const link = item && item.querySelector("a");
@@ -91,16 +113,24 @@ function syncActive() {
   const list = menuList();
   if (!list || !mounted) return;
 
+  const summaryOpen = Boolean(mounted.summaryController && mounted.summaryController.isOpen());
   const active = menuItems(list).find((item) => item.classList.contains(ACTIVE_CLASS));
   const id = active ? active.id : "";
 
+  mounted.summary.toggleAttribute(DOCK_ACTIVE_ATTR, summaryOpen);
+  mounted.summary.setAttribute("aria-current", summaryOpen ? "page" : "false");
+  mounted.summary.setAttribute("aria-expanded", summaryOpen ? "true" : "false");
+
   mounted.items.forEach((button, key) => {
-    const isActive = key === id;
+    const isActive = !summaryOpen && key === id;
     button.toggleAttribute(DOCK_ACTIVE_ATTR, isActive);
     button.setAttribute("aria-current", isActive ? "page" : "false");
   });
 
-  mounted.all.toggleAttribute(DOCK_ELSEWHERE_ATTR, Boolean(id) && !mounted.items.has(id));
+  mounted.all.toggleAttribute(
+    DOCK_ELSEWHERE_ATTR,
+    !summaryOpen && Boolean(id) && !mounted.items.has(id)
+  );
   mounted.panel.setActive(id);
 }
 
@@ -116,14 +146,20 @@ function build(sections) {
   nav.id = DOCK_ID;
   nav.setAttribute("aria-label", "Sections");
 
+  const summary = summaryButton();
+  nav.appendChild(summary);
+
+  const sectionWrap = document.createElement("div");
+  sectionWrap.className = "pesu-max-dock-sections";
   const items = new Map();
   sections
     .filter((id) => available.has(id))
     .forEach((id) => {
       const button = dockButton(id, available.get(id));
       items.set(id, button);
-      nav.appendChild(button);
+      sectionWrap.appendChild(button);
     });
+  nav.appendChild(sectionWrap);
 
   const all = allButton();
   nav.appendChild(all);
@@ -141,13 +177,14 @@ function build(sections) {
   classObserver.observe(list, { attributes: true, attributeFilter: ["class"], subtree: true });
 
   building = false;
-  return { list, nav, items, all, panel, observers: [listObserver, classObserver] };
+  return { list, nav, items, summary, all, panel, observers: [listObserver, classObserver] };
 }
 
 function teardown() {
   releaseRailWidth();
   if (!mounted) return;
   mounted.observers.forEach((observer) => observer.disconnect());
+  if (mounted.summaryController) mounted.summaryController.destroy();
   mounted.panel.destroy();
   mounted.nav.remove();
   mounted = null;
@@ -157,6 +194,12 @@ function mount(sections) {
   const next = build(sections);
   if (!next) return false;
   mounted = next;
+  next.summaryController = createSummary({
+    trigger: next.summary,
+    onActiveChange: () => syncActive(),
+    onBeforeOpen: () => next.panel.close(),
+    onOpenSection: (id) => selectSection(id, { fromSummary: true })
+  });
   return true;
 }
 
@@ -203,7 +246,10 @@ function refresh() {
   if (!mounted) return;
   if (menuList() !== mounted.list) {
     teardown();
-    if (mount(sectionsValue)) syncActive();
+    if (mount(sectionsValue)) {
+      syncActive();
+      mounted.summaryController.openFromRoute();
+    }
     return;
   }
   syncActive();
@@ -225,6 +271,7 @@ function apply(enabled, value) {
 
   if (!enabled) {
     root.removeAttribute(DOCK_ATTR);
+    clearSummaryHash();
     return;
   }
 
@@ -232,11 +279,13 @@ function apply(enabled, value) {
   claimRailWidth();
   if (!mount(sectionsValue)) {
     root.removeAttribute(DOCK_ATTR);
+    clearSummaryHash();
     return;
   }
 
   root.setAttribute(DOCK_ATTR, "");
   syncActive();
+  mounted.summaryController.openFromRoute();
 }
 
 // Off by default.
@@ -248,6 +297,12 @@ export async function initSideMenuDock() {
     load(SIDE_MENU_DOCK_SECTIONS_KEY)
   ]);
   apply(enabled === true, value);
+
+  const clearDisabledRoute = () => {
+    if (!isDockOn()) clearSummaryHash();
+  };
+  window.addEventListener("hashchange", clearDisabledRoute);
+  window.addEventListener("load", clearDisabledRoute, { once: true });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;

@@ -151,6 +151,10 @@ module.exports = (env, argv) => {
             to: 'content/sideMenuDock.css'
           },
           {
+            from: 'public/content/summary.css',
+            to: 'content/summary.css'
+          },
+          {
             from: 'public/content/themeTokens.css',
             to: 'content/themeTokens.css'
           },
